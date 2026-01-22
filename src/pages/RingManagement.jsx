@@ -74,7 +74,9 @@ export default function RingManagement() {
         
         const row = {};
         headers.forEach((h, idx) => {
-          row[h] = values[idx] || "";
+          // Map store_name to store for consistency
+          const fieldName = h === 'store_name' ? 'store' : h;
+          row[fieldName] = values[idx] || "";
         });
 
         // Validate required fields
