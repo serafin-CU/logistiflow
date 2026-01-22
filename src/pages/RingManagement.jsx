@@ -112,8 +112,14 @@ export default function RingManagement() {
     return matchStore && matchRingId && matchDeliveryDays;
   });
 
-  // Group filtered rings by store
-  const ringsByStore = filteredRings.reduce((acc, ring) => {
+  // Sort rings by alert count (highest first) and group by store
+  const sortedFilteredRings = [...filteredRings].sort((a, b) => {
+    const severityA = getRingSeverity(a);
+    const severityB = getRingSeverity(b);
+    return severityB.alertCount - severityA.alertCount;
+  });
+
+  const ringsByStore = sortedFilteredRings.reduce((acc, ring) => {
     if (!acc[ring.store]) acc[ring.store] = [];
     acc[ring.store].push(ring);
     return acc;
