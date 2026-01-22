@@ -16,8 +16,13 @@ import RingDetailSheet from "@/components/ring/RingDetailSheet";
 const Ring = base44.entities.Ring;
 const WeatherAlert = base44.entities.WeatherAlert;
 
+const DELIVERY_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
 export default function RingManagement() {
   const [selectedRing, setSelectedRing] = useState(null);
+  const [selectedStore, setSelectedStore] = useState('all');
+  const [ringIdSearch, setRingIdSearch] = useState('');
+  const [selectedDeliveryDays, setSelectedDeliveryDays] = useState([]);
 
   const { data: rings = [], isLoading } = useQuery({
     queryKey: ["rings"],
