@@ -15,6 +15,7 @@ export default function RingManagement() {
   const queryClient = useQueryClient();
   const [csvData, setCsvData] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useState(null);
 
   const { data: rings = [], isLoading } = useQuery({
     queryKey: ["rings"],
