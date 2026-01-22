@@ -7,26 +7,85 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { 
   Settings as SettingsIcon, Bell, Shield, Database, 
-  RefreshCw, Clock, Mail, Save, CheckCircle
+  RefreshCw, Clock, Mail, Save, CheckCircle, Plus, X, Edit
 } from "lucide-react";
 import { toast } from "sonner";
+import { base44 } from "@/api/base44Client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import RecipientConfigModal from "@/components/settings/RecipientConfigModal";
 
 export default function Settings() {
+  const queryClient = useQueryClient();
   const [settings, setSettings] = useState({
     autoRefreshAlerts: true,
     refreshInterval: "30",
     emailNotifications: true,
     highRiskThreshold: "70",
-    defaultRiskModel: "conservative",
-    notificationEmail: ""
+    defaultRiskModel: "conservative"
   });
+  const [newEmail, setNewEmail] = useState("");
+  const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const { data: recipients = [] } = useQuery({
+    queryKey: ["notification-recipients"],
+    queryFn: () => base44.entities.NotificationRecipient.list("-created_date", 100)
+  });
+
+  const createRecipientMutation = useMutation({
+    mutationFn: (email) => base44.entities.NotificationRecipient.create({
+      email,
+      severity_levels: ["severe", "extreme"],
+      stores: [],
+      is_active: true
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-recipients"] });
+      setNewEmail("");
+      toast.success("Email added successfully");
+    }
+  });
+
+  const updateRecipientMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.NotificationRecipient.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-recipients"] });
+      setSelectedRecipient(null);
+      toast.success("Configuration updated");
+    }
+  });
+
+  const deleteRecipientMutation = useMutation({
+    mutationFn: (id) => base44.entities.NotificationRecipient.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-recipients"] });
+      toast.success("Email removed");
+    }
+  });
+
+  const handleAddEmail = () => {
+    if (!newEmail || !newEmail.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    createRecipientMutation.mutate(newEmail);
+  };
+
+  const handleSaveRecipient = (updatedRecipient) => {
+    updateRecipientMutation.mutate({
+      id: updatedRecipient.id,
+      data: {
+        severity_levels: updatedRecipient.severity_levels,
+        stores: updatedRecipient.stores
+      }
+    });
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
-    // Simulate save
     await new Promise(resolve => setTimeout(resolve, 1000));
     setIsSaving(false);
     toast.success("Settings saved successfully");
@@ -213,19 +272,84 @@ export default function Settings() {
                 
                 <Separator />
                 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Notification Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="alerts@company.com"
-                    value={settings.notificationEmail}
-                    onChange={(e) => 
-                      setSettings({ ...settings, notificationEmail: e.target.value })
-                    }
-                    disabled={!settings.emailNotifications}
-                  />
+                <div className="space-y-3">
+                  <Label>Add Email Recipients</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="email@example.com"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddEmail()}
+                      disabled={!settings.emailNotifications}
+                    />
+                    <Button 
+                      onClick={handleAddEmail}
+                      disabled={!settings.emailNotifications || !newEmail}
+                      className="gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </Button>
+                  </div>
                 </div>
+
+                {recipients.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <Label>Email Recipients ({recipients.length})</Label>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {recipients.map((recipient) => (
+                          <motion.div
+                            key={recipient.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-blue-300 transition-all"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-slate-900">{recipient.email}</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {recipient.severity_levels?.map(level => (
+                                  <Badge 
+                                    key={level} 
+                                    variant="outline" 
+                                    className="text-xs"
+                                  >
+                                    {level}
+                                  </Badge>
+                                ))}
+                                {recipient.stores?.length > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {recipient.stores.length} store{recipient.stores.length > 1 ? 's' : ''}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSelectedRecipient(recipient)}
+                                className="hover:bg-blue-100"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteRecipientMutation.mutate(recipient.id)}
+                                className="hover:bg-red-100 hover:text-red-600"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -299,6 +423,14 @@ export default function Settings() {
             </Button>
           </motion.div>
         </div>
+
+        {/* Recipient Configuration Modal */}
+        <RecipientConfigModal
+          recipient={selectedRecipient}
+          open={!!selectedRecipient}
+          onOpenChange={(open) => !open && setSelectedRecipient(null)}
+          onSave={handleSaveRecipient}
+        />
       </div>
     </div>
   );
