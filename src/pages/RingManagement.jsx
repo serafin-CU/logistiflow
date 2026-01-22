@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Upload, MapPin, Store, Clock, Calendar, Download, Plus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import RingMapVisualization from "@/components/ring/RingMapVisualization";
+import RingDetailSheet from "@/components/ring/RingDetailSheet";
 
 const Ring = base44.entities.Ring;
 const WeatherAlert = base44.entities.WeatherAlert;
@@ -17,6 +18,7 @@ export default function RingManagement() {
   const queryClient = useQueryClient();
   const [csvData, setCsvData] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedRing, setSelectedRing] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleFileUpload = (e) => {
@@ -311,58 +313,44 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Store className="w-5 h-5 text-purple-600" />
-                  {store} - {storeRings.length} Rings
+                  {store}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
                   {storeRings.map((ring) => (
-                    <div
+                    <motion.div
                       key={ring.id}
-                      className="border border-slate-200 rounded-lg p-4 hover:border-purple-300 transition-colors"
+                      whileHover={{ scale: 1.01 }}
+                      className="border border-slate-200 rounded-lg p-4 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer bg-white"
+                      onClick={() => setSelectedRing(ring)}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="font-semibold text-slate-900">{ring.ring_id}</p>
-                          <p className="text-sm text-slate-600">{ring.region_name || 'No region'}</p>
-                        </div>
-                        <Badge variant="outline" className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {ring.delivery_time_days}D Delivery
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                        <div>
-                          <p className="text-slate-500 mb-1 flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            Facility
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="font-bold text-lg text-slate-900 mb-1">
+                            Ring {ring.ring_id}
                           </p>
-                          <p className="text-slate-700">{ring.facility_center || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-500 mb-1 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            Delivery Days
+                          <p className="text-sm text-slate-600">
+                            {ring.facility_center || 'No facility'} · {ring.delivery_days?.join(', ') || 'No delivery days'} · {ring.time_slots?.[0] || 'No time slot'}
                           </p>
-                          <p className="text-slate-700">{ring.delivery_days?.join(', ') || 'N/A'}</p>
                         </div>
-                        <div>
-                          <p className="text-slate-500 mb-1">Time Slots</p>
-                          <p className="text-slate-700">{ring.time_slots?.length || 0} slots</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-500 mb-1">Zipcodes</p>
-                          <p className="text-slate-700">{ring.zipcodes?.length || 0} codes</p>
-                        </div>
+                        <MapPin className="w-5 h-5 text-slate-400" />
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+
+        {/* Ring Detail Sheet */}
+        <RingDetailSheet 
+          ring={selectedRing}
+          alerts={alerts}
+          open={!!selectedRing}
+          onOpenChange={(open) => !open && setSelectedRing(null)}
+        />
       </div>
     </div>
   );
