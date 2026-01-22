@@ -229,6 +229,21 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
             </div>
 
             <div className="flex gap-3">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".csv"
+                className="hidden"
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                variant="outline"
+                className="gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Upload CSV File
+              </Button>
               <Button
                 onClick={importFromCSV}
                 disabled={!csvData.trim() || isUploading}
