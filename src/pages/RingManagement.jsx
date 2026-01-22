@@ -24,12 +24,28 @@ export default function RingManagement() {
   const importFromCSV = async () => {
     setIsUploading(true);
     try {
-      const lines = csvData.trim().split("\n");
+      const lines = csvData.trim().split("\n").filter(line => line.trim());
+      
+      if (lines.length === 0) {
+        alert("⚠️ Please paste CSV data first");
+        setIsUploading(false);
+        return;
+      }
+      
       if (lines.length < 2) {
-        throw new Error("CSV must have at least a header row and one data row");
+        alert("⚠️ CSV must have at least a header row and one data row");
+        setIsUploading(false);
+        return;
       }
 
       const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      
+      // Validate headers include required fields
+      if (!headers.includes('ring_id') || !headers.includes('store')) {
+        alert("⚠️ CSV must include 'ring_id' and 'store' columns in the header row");
+        setIsUploading(false);
+        return;
+      }
       
       const ringData = [];
       for (let i = 1; i < lines.length; i++) {
