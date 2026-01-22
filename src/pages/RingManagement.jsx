@@ -166,12 +166,27 @@ NYC-R1,New York,New York Kitchen,Manhattan-1D,Monday;Wednesday;Friday,8-10am;10-
 NYC-R2,New York,Washington DC Hub,Brooklyn-2D,Tuesday;Thursday,10-12pm;2-4pm,11201;11205;11206,40.6782,-73.9442
 LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90013;90014,34.0522,-118.2437`;
 
+  // Calculate unique ring IDs
+  const uniqueRingIds = new Set(rings.map(r => r.ring_id));
+  const uniqueRings = Array.from(uniqueRingIds).map(ringId => 
+    rings.find(r => r.ring_id === ringId)
+  );
+
   // Group rings by store
-  const ringsByStore = rings.reduce((acc, ring) => {
+  const ringsByStore = uniqueRings.reduce((acc, ring) => {
     if (!acc[ring.store]) acc[ring.store] = [];
     acc[ring.store].push(ring);
     return acc;
   }, {});
+
+  // Detect duplicates
+  const duplicateRingIds = rings.reduce((acc, ring) => {
+    const count = rings.filter(r => r.ring_id === ring.ring_id).length;
+    if (count > 1 && !acc.includes(ring.ring_id)) {
+      acc.push(ring.ring_id);
+    }
+    return acc;
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -192,11 +207,12 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
         </motion.div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="p-6">
-              <p className="text-sm text-slate-500 mb-1">Total Rings</p>
-              <p className="text-3xl font-bold text-slate-900">{rings.length}</p>
+              <p className="text-sm text-slate-500 mb-1">Unique Ring IDs</p>
+              <p className="text-3xl font-bold text-slate-900">{uniqueRingIds.size}</p>
+              <p className="text-xs text-slate-400 mt-1">({rings.length} total records)</p>
             </CardContent>
           </Card>
           <Card>
@@ -209,8 +225,17 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
             <CardContent className="p-6">
               <p className="text-sm text-slate-500 mb-1">1-Day Delivery</p>
               <p className="text-3xl font-bold text-slate-900">
-                {rings.filter(r => r.delivery_time_days === 1).length}
+                {uniqueRings.filter(r => r.delivery_time_days === 1).length}
               </p>
+            </CardContent>
+          </Card>
+          <Card className={duplicateRingIds.length > 0 ? "border-amber-300 bg-amber-50" : ""}>
+            <CardContent className="p-6">
+              <p className="text-sm text-slate-500 mb-1">Duplicates</p>
+              <p className="text-3xl font-bold text-amber-600">{duplicateRingIds.length}</p>
+              {duplicateRingIds.length > 0 && (
+                <p className="text-xs text-amber-600 mt-1">Ring IDs with duplicates</p>
+              )}
             </CardContent>
           </Card>
         </div>
