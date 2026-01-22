@@ -185,9 +185,84 @@ export default function RingManagement() {
 
 
 
+        {/* Filters */}
+        <Card className="mb-8">
+          <CardContent className="p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Store Filter */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Store</Label>
+                <select 
+                  value={selectedStore}
+                  onChange={(e) => setSelectedStore(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                >
+                  <option value="all">All Stores ({allStores.length})</option>
+                  {allStores.map(store => (
+                    <option key={store} value={store}>{store}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ring ID Search */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Ring ID</Label>
+                <Input
+                  placeholder="Search by Ring ID..."
+                  value={ringIdSearch}
+                  onChange={(e) => setRingIdSearch(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+
+              {/* Clear Filters */}
+              {(selectedStore !== 'all' || ringIdSearch || selectedDeliveryDays.length > 0) && (
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedStore('all');
+                      setRingIdSearch('');
+                      setSelectedDeliveryDays([]);
+                    }}
+                    className="gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear Filters
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Delivery Days Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-3 block">Delivery Days</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3">
+                {DELIVERY_DAYS.map(day => (
+                  <div key={day} className="flex items-center gap-2">
+                    <Checkbox
+                      id={day}
+                      checked={selectedDeliveryDays.includes(day)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedDeliveryDays([...selectedDeliveryDays, day]);
+                        } else {
+                          setSelectedDeliveryDays(selectedDeliveryDays.filter(d => d !== day));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={day} className="text-sm cursor-pointer">{day.slice(0, 3)}</Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Map Visualization */}
         <div className="mb-8">
-          <RingMapVisualization rings={rings} alerts={alerts} />
+          <RingMapVisualization rings={filteredRings} alerts={alerts} />
         </div>
 
         {/* Rings by Store */}
