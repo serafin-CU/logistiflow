@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { cn } from "@/lib/utils";
-import { CloudLightning, LayoutDashboard, Package, AlertTriangle, Settings, Menu, X } from "lucide-react";
+import { CloudLightning, LayoutDashboard, Package, AlertTriangle, Settings, Menu, X, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
