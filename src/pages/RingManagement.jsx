@@ -103,12 +103,24 @@ export default function RingManagement() {
     };
   };
 
-  // Group rings by store
-  const ringsByStore = uniqueRings.reduce((acc, ring) => {
+  // Filter rings based on search and filters
+  const filteredRings = uniqueRings.filter(ring => {
+    const matchStore = selectedStore === 'all' || ring.store === selectedStore;
+    const matchRingId = !ringIdSearch || ring.ring_id.toLowerCase().includes(ringIdSearch.toLowerCase());
+    const matchDeliveryDays = selectedDeliveryDays.length === 0 || 
+      (ring.delivery_days && ring.delivery_days.some(day => selectedDeliveryDays.includes(day)));
+    return matchStore && matchRingId && matchDeliveryDays;
+  });
+
+  // Group filtered rings by store
+  const ringsByStore = filteredRings.reduce((acc, ring) => {
     if (!acc[ring.store]) acc[ring.store] = [];
     acc[ring.store].push(ring);
     return acc;
   }, {});
+
+  // Get unique stores for filter dropdown
+  const allStores = [...new Set(uniqueRings.map(r => r.store))];
 
   // Detect duplicates
   const duplicateRingIds = rings.reduce((acc, ring) => {
