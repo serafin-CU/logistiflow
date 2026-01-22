@@ -276,40 +276,48 @@ Return risk score (0-100) and level (low/medium/high/critical).`,
 
         {/* Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <MetricCard
-            title="Total Deliveries"
-            value={totalDeliveries}
-            subtitle="Scheduled"
-            icon={Package}
-            accentColor="blue"
-          />
-          <MetricCard
-            title="High Risk"
-            value={highRiskCount}
-            subtitle="Deliveries at risk"
-            icon={AlertTriangle}
-            accentColor="red"
-          />
-          <MetricCard
-            title="Active Alerts"
-            value={activeAlerts}
-            subtitle="Weather warnings"
-            icon={CloudLightning}
-            accentColor="amber"
-          />
-          <MetricCard
-            title="Avg Risk Score"
-            value={`${avgRisk}%`}
-            subtitle="Across all deliveries"
-            icon={TrendingUp}
-            accentColor="purple"
-          />
+          <div className="cursor-pointer" onClick={() => setShowBulkModal(true)}>
+            <MetricCard
+              title="Total Deliveries"
+              value={totalDeliveries}
+              subtitle="Scheduled"
+              icon={Package}
+              accentColor="blue"
+            />
+          </div>
+          <div className="cursor-pointer" onClick={() => setRiskFilter('high')}>
+            <MetricCard
+              title="High Risk"
+              value={highRiskCount}
+              subtitle="Deliveries at risk"
+              icon={AlertTriangle}
+              accentColor="red"
+            />
+          </div>
+          <div className="cursor-pointer" onClick={refreshWeatherAlerts}>
+            <MetricCard
+              title="Active Alerts"
+              value={activeAlerts}
+              subtitle="Weather warnings"
+              icon={CloudLightning}
+              accentColor="amber"
+            />
+          </div>
+          <div className="cursor-pointer">
+            <MetricCard
+              title="Avg Risk Score"
+              value={`${avgRisk}%`}
+              subtitle="Across all deliveries"
+              icon={TrendingUp}
+              accentColor="purple"
+            />
+          </div>
         </div>
 
         {/* Manager Briefing Section */}
         {upcomingDeliveries.length > 0 && (
           <div className="mb-8">
-            <ManagerBriefing deliveries={upcomingDeliveries} alerts={alerts} />
+            <ManagerBriefing deliveries={upcomingDeliveries} alerts={alerts} rings={rings} />
           </div>
         )}
 

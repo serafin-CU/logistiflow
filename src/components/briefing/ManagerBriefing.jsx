@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 import { format, addDays, isAfter, isBefore, parseISO } from "date-fns";
 import RiskBadge from "../dashboard/RiskBadge";
+import DetailedReportModal from "./DetailedReportModal";
 
-const RecommendationCard = ({ recommendation, index }) => {
+const RecommendationCard = ({ recommendation, index, onClick }) => {
   const actionIcons = {
     proceed: CheckCircle,
     delay: PauseCircle,
@@ -34,7 +35,8 @@ const RecommendationCard = ({ recommendation, index }) => {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-all"
+      onClick={onClick}
+      className="border border-slate-200 rounded-xl p-4 hover:border-slate-400 hover:shadow-md transition-all cursor-pointer"
     >
       <div className="flex items-start gap-3">
         <div className={`p-2 rounded-lg ${actionColors[recommendation.action]}`}>
@@ -105,8 +107,10 @@ const ImpactSummary = ({ deliveries, alerts }) => {
   );
 };
 
-export default function ManagerBriefing({ deliveries = [], alerts = [] }) {
+export default function ManagerBriefing({ deliveries = [], alerts = [], rings = [] }) {
   const [selectedTimeframe, setSelectedTimeframe] = useState("today");
+  const [selectedRecommendation, setSelectedRecommendation] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   // Generate recommendations based on risk analysis
   const generateRecommendations = () => {
@@ -345,7 +349,15 @@ ${alerts.map(a => `- ${a.event} (${a.severity}) - ${a.affected_states?.join(', '
           <CardContent className="space-y-3">
             {recommendations.length > 0 ? (
               recommendations.map((rec, i) => (
-                <RecommendationCard key={i} recommendation={rec} index={i} />
+                <RecommendationCard 
+                  key={i} 
+                  recommendation={rec} 
+                  index={i}
+                  onClick={() => {
+                    setSelectedRecommendation(rec);
+                    setShowDetailModal(true);
+                  }}
+                />
               ))
             ) : (
               <div className="text-center py-8 text-slate-500">
@@ -417,6 +429,16 @@ ${alerts.map(a => `- ${a.event} (${a.severity}) - ${a.affected_states?.join(', '
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Detailed Report Modal */}
+      <DetailedReportModal
+        open={showDetailModal}
+        onOpenChange={setShowDetailModal}
+        recommendation={selectedRecommendation}
+        deliveries={deliveries}
+        alerts={alerts}
+        rings={rings}
+      />
     </div>
   );
 }
