@@ -55,9 +55,12 @@ export default function RingManagement() {
 
       const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
       
-      // Validate headers include required fields
-      if (!headers.includes('ring_id') || !headers.includes('store')) {
-        alert("⚠️ CSV must include 'ring_id' and 'store' columns in the header row");
+      // Validate headers include required fields (accept variations)
+      const hasRingId = headers.includes('ring_id');
+      const hasStore = headers.includes('store') || headers.includes('store_name');
+      
+      if (!hasRingId || !hasStore) {
+        alert("⚠️ CSV must include 'ring_id' (or 'Ring_ID') and 'store' (or 'STORE_NAME') columns in the header row");
         setIsUploading(false);
         return;
       }
