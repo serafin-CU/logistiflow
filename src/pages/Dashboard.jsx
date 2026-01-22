@@ -167,7 +167,16 @@ export default function Dashboard() {
   };
 
   // Filter deliveries
-  const filteredDeliveries = deliveries.filter(d => {
+  // Filter for upcoming deliveries only (future dates)
+  const upcomingDeliveries = deliveries.filter(d => {
+    if (!d.delivery_date) return false;
+    const deliveryDate = new Date(d.delivery_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return deliveryDate >= today;
+  });
+
+  const filteredDeliveries = upcomingDeliveries.filter(d => {
     const matchesSearch = !searchQuery || 
       d.tracking_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -178,27 +187,27 @@ export default function Dashboard() {
     return matchesSearch && matchesRisk;
   });
 
-  // Calculate metrics
-  const totalDeliveries = deliveries.length;
-  const highRiskCount = deliveries.filter(d => d.risk_level === "high" || d.risk_level === "critical").length;
+  // Calculate metrics (upcoming deliveries only)
+  const totalDeliveries = upcomingDeliveries.length;
+  const highRiskCount = upcomingDeliveries.filter(d => d.risk_level === "high" || d.risk_level === "critical").length;
   const activeAlerts = alerts.length;
-  const avgRisk = deliveries.length > 0 
-    ? Math.round(deliveries.reduce((sum, d) => sum + (d.risk_score || 0), 0) / deliveries.length)
+  const avgRisk = upcomingDeliveries.length > 0 
+    ? Math.round(upcomingDeliveries.reduce((sum, d) => sum + (d.risk_score || 0), 0) / upcomingDeliveries.length)
     : 0;
 
-  // Generate chart data
+  // Generate chart data (upcoming deliveries only)
   const chartData = Array.from({ length: 7 }, (_, i) => {
     const date = addDays(new Date(), i);
     const dateStr = format(date, "yyyy-MM-dd");
-    const dayDeliveries = deliveries.filter(d => d.delivery_date === dateStr);
+    const dayDeliveries = upcomingDeliveries.filter(d => d.delivery_date === dateStr);
     const avgDayRisk = dayDeliveries.length > 0
       ? Math.round(dayDeliveries.reduce((sum, d) => sum + (d.risk_score || 0), 0) / dayDeliveries.length)
-      : Math.random() * 30 + 10;
+      : 0;
     
     return {
       date: format(date, "MMM d"),
       risk: avgDayRisk,
-      deliveries: dayDeliveries.length || Math.floor(Math.random() * 10 + 5)
+      deliveries: dayDeliveries.length
     };
   });
 
@@ -280,9 +289,11 @@ export default function Dashboard() {
         </div>
 
         {/* Manager Briefing Section */}
-        <div className="mb-8">
-          <ManagerBriefing deliveries={deliveries} alerts={alerts} />
-        </div>
+        {upcomingDeliveries.length > 0 && (
+          <div className="mb-8">
+            <ManagerBriefing deliveries={upcomingDeliveries} alerts={alerts} />
+          </div>
+        )}
 
         {/* Interactive Map - Full Width */}
         <div className="mb-8">
@@ -368,7 +379,27 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {filteredDeliveries.length > 0 ? (
+          {upcomingDeliveries.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+              <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-700 font-medium mb-2">Upload upcoming tasks, with Ring ID, shipping or delivery date, so that we can assess correctly</p>
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <Button
+                  onClick={() => setShowBulkModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAddModal(true)}
+                >
+                  Add Manually
+                </Button>
+              </div>
+            </div>
+          ) : filteredDeliveries.length > 0 ? (
             <div className="space-y-2">
               <AnimatePresence>
                 {filteredDeliveries.map((delivery, i) => (
@@ -387,13 +418,7 @@ export default function Dashboard() {
           ) : (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
               <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500">No deliveries found</p>
-              <Button
-                onClick={() => setShowAddModal(true)}
-                className="mt-3 bg-blue-600 hover:bg-blue-700"
-              >
-                Add Your First Delivery
-              </Button>
+              <p className="text-slate-500">No deliveries match your filters</p>
             </div>
           )}
         </motion.div>
