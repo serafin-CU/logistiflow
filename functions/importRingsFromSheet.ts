@@ -52,9 +52,29 @@ Deno.serve(async (req) => {
       const key = `${store}-${ringId}`;
 
       if (!ringsMap.has(key)) {
+        // Map store to state abbreviation
+        const storeToState = {
+          'New York': 'NY',
+          'Los Angeles': 'CA',
+          'Chicago': 'IL',
+          'Houston': 'TX',
+          'Miami': 'FL',
+          'Boston': 'MA',
+          'Seattle': 'WA',
+          'Denver': 'CO',
+          'Atlanta': 'GA',
+          'Phoenix': 'AZ',
+          'San Francisco': 'CA',
+          'Philadelphia': 'PA',
+          'Dallas': 'TX',
+          'San Diego': 'CA',
+          'San Jose': 'CA'
+        };
+
         ringsMap.set(key, {
           ring_id: `${ringName}-${ringId}`,
           store: store,
+          state: storeToState[store] || state || null,
           facility_center: null,
           region_name: ringName,
           delivery_days: deliveryDays ? deliveryDays.split(',').map(d => d.trim()) : [],
@@ -64,7 +84,6 @@ Deno.serve(async (req) => {
           latitude: null,
           longitude: null,
           is_active: true,
-          state: state || store || null,
           zones: []
         });
       }
