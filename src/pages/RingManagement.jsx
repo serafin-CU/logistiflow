@@ -25,26 +25,41 @@ export default function RingManagement() {
     setIsUploading(true);
     try {
       const lines = csvData.trim().split("\n");
-      const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+      if (lines.length < 2) {
+        throw new Error("CSV must have at least a header row and one data row");
+      }
+
+      const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
       
       const ringData = [];
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map(v => v.trim());
-        if (values.length !== headers.length) continue;
+        const line = lines[i].trim();
+        if (!line) continue; // Skip empty lines
+        
+        const values = line.split(",").map(v => v.trim());
         
         const row = {};
         headers.forEach((h, idx) => {
-          row[h] = values[idx];
+          row[h] = values[idx] || "";
         });
 
-        // Parse delivery days
-        const deliveryDays = row.delivery_days ? row.delivery_days.split(';').map(d => d.trim()) : [];
+        // Validate required fields
+        if (!row.ring_id || !row.store) {
+          console.warn(`Skipping row ${i + 1}: missing ring_id or store`);
+          continue;
+        }
+
+        // Parse delivery days - handle single day or semicolon-separated
+        const deliveryDays = row.delivery_days ? 
+          row.delivery_days.split(/[;,]/).map(d => d.trim()).filter(d => d) : [];
         
-        // Parse time slots
-        const timeSlots = row.time_slots ? row.time_slots.split(';').map(t => t.trim()) : [];
+        // Parse time slots - handle single slot or semicolon-separated  
+        const timeSlots = row.time_slots ? 
+          row.time_slots.split(/[;,]/).map(t => t.trim()).filter(t => t) : [];
         
-        // Parse zipcodes
-        const zipcodes = row.zipcodes ? row.zipcodes.split(';').map(z => z.trim()) : [];
+        // Parse zipcodes - handle single code or semicolon-separated
+        const zipcodes = row.zipcodes ? 
+          row.zipcodes.split(/[;,]/).map(z => z.trim()).filter(z => z) : [];
         
         // Determine delivery time from region name
         const deliveryTimeDays = row.region_name?.includes('2D') ? 2 : 1;
@@ -52,8 +67,8 @@ export default function RingManagement() {
         ringData.push({
           ring_id: row.ring_id,
           store: row.store,
-          facility_center: row.facility_center,
-          region_name: row.region_name,
+          facility_center: row.facility_center || null,
+          region_name: row.region_name || null,
           delivery_days: deliveryDays,
           time_slots: timeSlots,
           zipcodes: zipcodes,
@@ -64,12 +79,16 @@ export default function RingManagement() {
         });
       }
 
+      if (ringData.length === 0) {
+        throw new Error("No valid rings found in CSV data");
+      }
+
       await Ring.bulkCreate(ringData);
       queryClient.invalidateQueries({ queryKey: ["rings"] });
       setCsvData("");
-      alert(`Successfully imported ${ringData.length} rings`);
+      alert(`✅ Successfully imported ${ringData.length} ring(s)`);
     } catch (error) {
-      alert(`Error importing rings: ${error.message}`);
+      alert(`❌ Error importing rings: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
