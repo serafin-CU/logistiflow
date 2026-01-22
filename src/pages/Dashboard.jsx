@@ -55,15 +55,39 @@ export default function Dashboard() {
     queryFn: () => Ring.filter({ is_active: true })
   });
 
-  // Calculate risk using AI
+  // Calculate risk using AI with zipcode-level precision
   const calculateRisk = async (delivery) => {
+    // Get precise zone information for the delivery zipcode
+    let zoneInfo = null;
+    try {
+      const zoneResponse = await base44.functions.invoke('getZipcodeZone', { 
+        zipcode: delivery.zipcode 
+      });
+      zoneInfo = zoneResponse.data;
+    } catch (error) {
+      console.warn('Failed to get zipcode zone, falling back to state-level matching:', error);
+    }
+
+    // Match alerts using zipcode-level precision (zones) or fallback to state
     const relevantAlerts = alerts.filter(alert => {
-      if (alert.affected_states?.includes(delivery.state)) return true;
+      // First try zone-level matching (most precise)
+      if (zoneInfo?.county_zone && alert.affected_zones?.includes(zoneInfo.county_zone)) {
+        return true;
+      }
+      if (zoneInfo?.forecast_zone && alert.affected_zones?.includes(zoneInfo.forecast_zone)) {
+        return true;
+      }
+      // Fallback to state-level matching
+      if (alert.affected_states?.includes(delivery.state)) {
+        return true;
+      }
       return false;
     });
 
     const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Analyze delivery risk for ${delivery.city}, ${delivery.state} on ${delivery.delivery_date}.
+      prompt: `Analyze delivery risk for zipcode ${delivery.zipcode} in ${delivery.city}, ${delivery.state} on ${delivery.delivery_date}.
+
+Location details: ${zoneInfo ? `County: ${zoneInfo.county}, Zone: ${zoneInfo.zone || 'N/A'}` : 'State-level only'}
 
 Active weather alerts: ${relevantAlerts.length > 0 ? relevantAlerts.map(a => `${a.event} (${a.severity})`).join(", ") : "None"}
 
