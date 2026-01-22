@@ -203,7 +203,7 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
                 disabled={!csvData.trim() || isUploading}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                {isUploading ? "Importing..." : "Import Rings"}
+                {isUploading ? "Importing..." : "Import CSV"}
               </Button>
               <Button variant="outline" onClick={() => setCsvData(sampleCSV)}>
                 Load Sample
