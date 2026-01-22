@@ -63,33 +63,26 @@ export default function Dashboard() {
     });
 
     const response = await base44.integrations.Core.InvokeLLM({
-      prompt: `Analyze the delivery risk based on weather conditions:
-      
-      Delivery Details:
-      - Location: ${delivery.city}, ${delivery.state} ${delivery.zipcode}
-      - Scheduled Date: ${delivery.delivery_date}
-      
-      Active Weather Alerts in the area:
-      ${relevantAlerts.length > 0 ? relevantAlerts.map(a => `- ${a.event} (${a.severity}): ${a.headline}`).join("\n") : "No active alerts"}
-      
-      Calculate a risk score from 0-100 and classify as low/medium/high/critical.
-      Consider factors like:
-      - Severity of weather alerts
-      - Impact on road conditions and delivery logistics
-      - Timing overlap between alert and delivery date`,
+      prompt: `Analyze delivery risk for ${delivery.city}, ${delivery.state} on ${delivery.delivery_date}.
+
+Active weather alerts: ${relevantAlerts.length > 0 ? relevantAlerts.map(a => `${a.event} (${a.severity})`).join(", ") : "None"}
+
+Return risk score (0-100) and level (low/medium/high/critical).`,
       response_json_schema: {
         type: "object",
         properties: {
           risk_score: { type: "number" },
-          risk_level: { type: "string", enum: ["low", "medium", "high", "critical"] },
-          weather_alerts: { type: "array", items: { type: "string" } },
-          reasoning: { type: "string" }
+          risk_level: { type: "string", enum: ["low", "medium", "high", "critical"] }
         },
         required: ["risk_score", "risk_level"]
       }
     });
 
-    return response;
+    return {
+      risk_score: response.risk_score,
+      risk_level: response.risk_level,
+      weather_alerts: relevantAlerts.map(a => a.event)
+    };
   };
 
   // Create delivery mutation
