@@ -39,6 +39,7 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
   const [analysisData, setAnalysisData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [clickedPosition, setClickedPosition] = useState(null);
+  const [showWeatherLayer, setShowWeatherLayer] = useState(true);
 
   const handleMapClick = async (latlng) => {
     setClickedPosition(latlng);
@@ -129,6 +130,14 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs">
+              <Button
+                variant={showWeatherLayer ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowWeatherLayer(!showWeatherLayer)}
+                className="text-xs"
+              >
+                {showWeatherLayer ? "Hide" : "Show"} Weather Layer
+              </Button>
               <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200">
                 <span className="text-slate-600">{alerts.length} Active Alerts</span>
               </div>
@@ -151,6 +160,15 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
                 attribution='&copy; OpenStreetMap'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              
+              {/* Weather Radar Layer - Live Precipitation */}
+              {showWeatherLayer && (
+                <TileLayer
+                  url="https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02"
+                  attribution='Weather data &copy; OpenWeatherMap'
+                  opacity={0.6}
+                />
+              )}
               
               <MapClickHandler onMapClick={handleMapClick} />
 
