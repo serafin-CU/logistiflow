@@ -15,10 +15,11 @@ import MetricCard from "@/components/dashboard/MetricCard";
 import RiskChart from "@/components/dashboard/RiskChart";
 import AlertCard from "@/components/dashboard/AlertCard";
 import DeliveryRow from "@/components/dashboard/DeliveryRow";
-import USMapView from "@/components/dashboard/USMapView";
+import WeatherRiskMap from "@/components/map/WeatherRiskMap";
 import AddDeliveryModal from "@/components/delivery/AddDeliveryModal";
 import DeliveryDetailSheet from "@/components/delivery/DeliveryDetailSheet";
 import BulkUploadModal from "@/components/upload/BulkUploadModal";
+import ManagerBriefing from "@/components/briefing/ManagerBriefing";
 
 const Delivery = base44.entities.Delivery;
 const WeatherAlert = base44.entities.WeatherAlert;
@@ -318,17 +319,19 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Chart */}
-          <div className="lg:col-span-2">
-            <RiskChart data={chartData} />
-          </div>
-          
-          {/* Map */}
-          <div>
-            <USMapView alerts={alerts} deliveries={deliveries} />
-          </div>
+        {/* Manager Briefing Section */}
+        <div className="mb-8">
+          <ManagerBriefing deliveries={deliveries} alerts={alerts} />
+        </div>
+
+        {/* Map View - Full Width */}
+        <div className="mb-8">
+          <WeatherRiskMap alerts={alerts} deliveries={deliveries} />
+        </div>
+
+        {/* Chart */}
+        <div className="mb-8">
+          <RiskChart data={chartData} />
         </div>
 
         {/* Weather Alerts */}
