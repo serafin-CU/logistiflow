@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Package, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import RiskBadge from "../dashboard/RiskBadge";
-import 'react-leaflet/dist/react-leaflet.css';
 
 // US State boundaries (simplified coordinates for major states)
 const stateBoundaries = {
