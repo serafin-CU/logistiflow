@@ -1,17 +1,17 @@
+import Alerts from './pages/Alerts';
 import Dashboard from './pages/Dashboard';
 import Deliveries from './pages/Deliveries';
-import Alerts from './pages/Alerts';
-import Settings from './pages/Settings';
 import RingManagement from './pages/RingManagement';
+import Settings from './pages/Settings';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
+    "Alerts": Alerts,
     "Dashboard": Dashboard,
     "Deliveries": Deliveries,
-    "Alerts": Alerts,
-    "Settings": Settings,
     "RingManagement": RingManagement,
+    "Settings": Settings,
 }
 
 export const pagesConfig = {

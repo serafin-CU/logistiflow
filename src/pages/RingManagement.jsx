@@ -22,13 +22,103 @@ export default function RingManagement() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const text = event.target?.result;
       if (typeof text === 'string') {
         setCsvData(text);
+        // Auto-import after file is loaded
+        await processCSVImport(text);
       }
     };
     reader.readAsText(file);
+  };
+
+  const processCSVImport = async (data) => {
+    setIsUploading(true);
+    try {
+      const lines = data.trim().split("\n").filter(line => line.trim());
+      
+      if (lines.length === 0) {
+        alert("⚠️ Please paste CSV data first");
+        setIsUploading(false);
+        return;
+      }
+      
+      if (lines.length < 2) {
+        alert("⚠️ CSV must have at least a header row and one data row");
+        setIsUploading(false);
+        return;
+      }
+
+      const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      
+      // Validate headers include required fields (accept variations)
+      const hasRingId = headers.includes('ring_id');
+      const hasStore = headers.includes('store') || headers.includes('store_name');
+      
+      if (!hasRingId || !hasStore) {
+        alert("⚠️ CSV must include 'ring_id' (or 'Ring_ID') and 'store' (or 'STORE_NAME') columns in the header row");
+        setIsUploading(false);
+        return;
+      }
+      
+      const ringData = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const values = line.split(",").map(v => v.trim());
+        
+        const row = {};
+        headers.forEach((h, idx) => {
+          const fieldName = h === 'store_name' ? 'store' : h;
+          row[fieldName] = values[idx] || "";
+        });
+
+        if (!row.ring_id || !row.store) {
+          console.warn(`Skipping row ${i + 1}: missing ring_id or store`);
+          continue;
+        }
+
+        const deliveryDays = row.delivery_days ? 
+          row.delivery_days.split(/[;,]/).map(d => d.trim()).filter(d => d) : [];
+        
+        const timeSlots = row.time_slots ? 
+          row.time_slots.split(/[;,]/).map(t => t.trim()).filter(t => t) : [];
+        
+        const zipcodes = row.zipcodes ? 
+          row.zipcodes.split(/[;,]/).map(z => z.trim()).filter(z => z) : [];
+        
+        const deliveryTimeDays = row.region_name?.includes('2D') ? 2 : 1;
+
+        ringData.push({
+          ring_id: row.ring_id,
+          store: row.store,
+          facility_center: row.facility_center || null,
+          region_name: row.region_name || null,
+          delivery_days: deliveryDays,
+          time_slots: timeSlots,
+          zipcodes: zipcodes,
+          delivery_time_days: deliveryTimeDays,
+          latitude: row.latitude ? parseFloat(row.latitude) : null,
+          longitude: row.longitude ? parseFloat(row.longitude) : null,
+          is_active: true
+        });
+      }
+
+      if (ringData.length === 0) {
+        throw new Error("No valid rings found in CSV data");
+      }
+
+      await Ring.bulkCreate(ringData);
+      queryClient.invalidateQueries({ queryKey: ["rings"] });
+      setCsvData("");
+      alert(`✅ Successfully imported ${ringData.length} ring(s)`);
+    } catch (error) {
+      alert(`❌ Error importing rings: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const { data: rings = [], isLoading } = useQuery({
