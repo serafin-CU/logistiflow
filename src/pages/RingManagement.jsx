@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Upload, MapPin, Store, Clock, Calendar, Download, Plus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { format, addDays, parseISO, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import RingMapVisualization from "@/components/ring/RingMapVisualization";
 import RingDetailSheet from "@/components/ring/RingDetailSheet";
 
@@ -194,16 +195,65 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
     rings.find(r => r.ring_id === ringId)
   );
 
-  // Check which rings have severe alerts
+  // Check which rings have alerts affecting upcoming deliveries
   const getRingSeverity = (ring) => {
-    const ringAlerts = alerts.filter(alert => {
-      if (!alert.is_active) return false;
-      return alert.affected_states?.includes(ring.state) || 
-             alert.affected_zones?.some(zone => ring.zones?.includes(zone));
+    if (!ring.delivery_days || ring.delivery_days.length === 0) {
+      return { alertCount: 0, hasSevere: false, affectedDeliveries: 0 };
+    }
+
+    // Get upcoming delivery dates for next 14 days
+    const today = new Date();
+    const upcomingDeliveries = [];
+    
+    for (let i = 0; i < 14; i++) {
+      const date = addDays(today, i);
+      const dayName = format(date, 'EEEE');
+      if (ring.delivery_days.includes(dayName)) {
+        upcomingDeliveries.push(date);
+      }
+    }
+
+    // Find alerts that affect this ring AND overlap with delivery days
+    let affectedDeliveryCount = 0;
+    const impactingAlerts = new Set();
+    
+    upcomingDeliveries.forEach(deliveryDate => {
+      const dayStart = startOfDay(deliveryDate);
+      const dayEnd = endOfDay(deliveryDate);
+      
+      alerts.forEach(alert => {
+        if (!alert.is_active) return;
+        
+        // Check geographic match
+        const affectsRing = alert.affected_states?.includes(ring.state) || 
+                           alert.affected_zones?.some(zone => ring.zones?.includes(zone));
+        
+        if (!affectsRing) return;
+        
+        // Check temporal overlap
+        const alertStart = alert.start_time ? parseISO(alert.start_time) : null;
+        const alertEnd = alert.end_time ? parseISO(alert.end_time) : null;
+        
+        if (alertStart && alertEnd) {
+          if (isBefore(alertStart, dayEnd) && isAfter(alertEnd, dayStart)) {
+            impactingAlerts.add(alert.id);
+            affectedDeliveryCount++;
+          }
+        }
+      });
     });
 
+    const ringAlerts = Array.from(impactingAlerts).map(id => 
+      alerts.find(a => a.id === id)
+    );
+    
     const hasSevere = ringAlerts.some(a => a.severity === 'severe' || a.severity === 'extreme');
-    return { alertCount: ringAlerts.length, hasSevere };
+    
+    return { 
+      alertCount: ringAlerts.length, 
+      hasSevere,
+      affectedDeliveries: affectedDeliveryCount
+    };
   };
 
   // Group rings by store
@@ -405,10 +455,25 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
                                   {severity.alertCount} Alert{severity.alertCount > 1 ? 's' : ''}
                                 </Badge>
                               )}
+                              {severity.affectedDeliveries > 0 && (
+                                <Badge variant="outline" className={severity.hasSevere ? 'border-red-600 text-red-700' : 'border-yellow-600 text-yellow-700'}>
+                                  {severity.affectedDeliveries} Delivery{severity.affectedDeliveries > 1 ? ' Days' : ' Day'} Impacted
+                                </Badge>
+                              )}
                             </div>
-                            <p className="text-sm text-slate-600">
-                              {ring.facility_center || 'No facility'} · {ring.delivery_days?.join(', ') || 'No delivery days'} · {ring.time_slots?.[0] || 'No time slot'}
-                            </p>
+                            <div className="space-y-1">
+                              <p className="text-sm text-slate-600">
+                                {ring.facility_center || 'No facility'} · {ring.region_name || 'No region'}
+                              </p>
+                              <p className="text-sm text-slate-600">
+                                📅 {ring.delivery_days?.join(', ') || 'No delivery days'}
+                              </p>
+                              {ring.zipcodes && ring.zipcodes.length > 0 && (
+                                <p className="text-xs text-slate-500">
+                                  {ring.zipcodes.length} zipcodes · {ring.state || 'State N/A'}
+                                </p>
+                              )}
+                            </div>
                           </div>
                           <MapPin className={`w-5 h-5 ${severity.hasSevere ? 'text-red-600' : 'text-slate-400'}`} />
                         </div>

@@ -101,27 +101,33 @@ export default function RingDetailSheet({ ring, alerts, open, onOpenChange }) {
     const deliveryDates = getNextDeliveryDates();
     
     return deliveryDates.map(date => {
+      const deliveryStartOfDay = startOfDay(date);
+      const deliveryEndOfDay = endOfDay(date);
+      
       const relevantAlerts = allRingAlerts.filter(alert => {
-        // Check if alert is active on delivery date
+        // Check if alert overlaps with the delivery day
         const alertStart = alert.start_time ? parseISO(alert.start_time) : null;
         const alertEnd = alert.end_time ? parseISO(alert.end_time) : null;
         
         if (alertStart && alertEnd) {
-          return date >= alertStart && date <= alertEnd;
+          // Alert overlaps if: (alert starts before day ends) AND (alert ends after day starts)
+          return isBefore(alertStart, deliveryEndOfDay) && isAfter(alertEnd, deliveryStartOfDay);
         }
-        return true;
+        return false;
       });
 
+      const severityRank = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
       const highestSeverity = relevantAlerts.reduce((max, alert) => {
-        const severityRank = { minor: 1, moderate: 2, severe: 3, extreme: 4 };
         const alertRank = severityRank[alert.severity] || 0;
         return alertRank > max ? alertRank : max;
       }, 0);
 
+      const severityNames = ['minor', 'moderate', 'severe', 'extreme'];
+
       return {
         date,
         alerts: relevantAlerts,
-        severity: Object.keys({ minor: 1, moderate: 2, severe: 3, extreme: 4 })[highestSeverity - 1] || 'none'
+        severity: highestSeverity > 0 ? severityNames[highestSeverity - 1] : 'none'
       };
     });
   };
