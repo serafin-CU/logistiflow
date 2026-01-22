@@ -21,6 +21,7 @@ import DeliveryDetailSheet from "@/components/delivery/DeliveryDetailSheet";
 import BulkUploadModal from "@/components/upload/BulkUploadModal";
 import ManagerBriefing from "@/components/briefing/ManagerBriefing";
 import RingWeatherForecast from "@/components/dashboard/RingWeatherForecast";
+import RingBriefing from "@/components/dashboard/RingBriefing";
 
 const Delivery = base44.entities.Delivery;
 const WeatherAlert = base44.entities.WeatherAlert;
