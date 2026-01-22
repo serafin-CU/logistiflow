@@ -174,6 +174,18 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
     rings.find(r => r.ring_id === ringId)
   );
 
+  // Check which rings have severe alerts
+  const getRingSeverity = (ring) => {
+    const ringAlerts = alerts.filter(alert => {
+      if (!alert.is_active) return false;
+      return alert.affected_states?.includes(ring.state) || 
+             alert.affected_zones?.some(zone => ring.zones?.includes(zone));
+    });
+
+    const hasSevere = ringAlerts.some(a => a.severity === 'severe' || a.severity === 'extreme');
+    return { alertCount: ringAlerts.length, hasSevere };
+  };
+
   // Group rings by store
   const ringsByStore = uniqueRings.reduce((acc, ring) => {
     if (!acc[ring.store]) acc[ring.store] = [];
@@ -347,26 +359,42 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
-                  {storeRings.map((ring) => (
-                    <motion.div
-                      key={ring.id}
-                      whileHover={{ scale: 1.01 }}
-                      className="border border-slate-200 rounded-lg p-4 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer bg-white"
-                      onClick={() => setSelectedRing(ring)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="font-bold text-lg text-slate-900 mb-1">
-                            Ring {ring.ring_id}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            {ring.facility_center || 'No facility'} · {ring.delivery_days?.join(', ') || 'No delivery days'} · {ring.time_slots?.[0] || 'No time slot'}
-                          </p>
+                  {storeRings.map((ring) => {
+                    const severity = getRingSeverity(ring);
+                    return (
+                      <motion.div
+                        key={ring.id}
+                        whileHover={{ scale: 1.01 }}
+                        className={`border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer ${
+                          severity.hasSevere 
+                            ? 'border-red-400 bg-red-50 hover:border-red-500' 
+                            : severity.alertCount > 0 
+                            ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
+                            : 'border-slate-200 bg-white hover:border-purple-400'
+                        }`}
+                        onClick={() => setSelectedRing(ring)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-bold text-lg text-slate-900">
+                                Ring {ring.ring_id}
+                              </p>
+                              {severity.alertCount > 0 && (
+                                <Badge className={severity.hasSevere ? 'bg-red-600' : 'bg-yellow-600'}>
+                                  {severity.alertCount} Alert{severity.alertCount > 1 ? 's' : ''}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-600">
+                              {ring.facility_center || 'No facility'} · {ring.delivery_days?.join(', ') || 'No delivery days'} · {ring.time_slots?.[0] || 'No time slot'}
+                            </p>
+                          </div>
+                          <MapPin className={`w-5 h-5 ${severity.hasSevere ? 'text-red-600' : 'text-slate-400'}`} />
                         </div>
-                        <MapPin className="w-5 h-5 text-slate-400" />
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

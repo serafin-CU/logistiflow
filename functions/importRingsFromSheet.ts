@@ -64,7 +64,8 @@ Deno.serve(async (req) => {
           latitude: null,
           longitude: null,
           is_active: true,
-          state: state || null
+          state: state || store || null,
+          zones: []
         });
       }
 
