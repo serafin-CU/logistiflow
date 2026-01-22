@@ -17,6 +17,20 @@ export default function RingManagement() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useState(null);
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      if (typeof text === 'string') {
+        setCsvData(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const { data: rings = [], isLoading } = useQuery({
     queryKey: ["rings"],
     queryFn: () => Ring.list("-created_date", 500)
