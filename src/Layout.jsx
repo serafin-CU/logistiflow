@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { cn } from "@/lib/utils";
-import { CloudLightning, LayoutDashboard, Package, AlertTriangle, Settings, Menu, X, MapPin } from "lucide-react";
+import { CloudLightning, LayoutDashboard, Package, AlertTriangle, Settings, Menu, X, MapPin, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { base44 } from "@/api/base44Client";
 
-const navItems = [
+const baseNavItems = [
   { name: "Dashboard", page: "Dashboard", icon: LayoutDashboard },
   { name: "Deliveries", page: "Deliveries", icon: Package },
   { name: "Alerts", page: "Alerts", icon: AlertTriangle },
@@ -16,6 +17,23 @@ const navItems = [
 
 export default function Layout({ children, currentPageName }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [navItems, setNavItems] = useState(baseNavItems);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const user = await base44.auth.me();
+        if (user?.role === 'admin') {
+          setIsAdmin(true);
+          setNavItems([...baseNavItems, { name: "Admin", page: "Admin", icon: Shield }]);
+        }
+      } catch (error) {
+        // User not authenticated or not admin
+      }
+    };
+    checkAdmin();
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50">
