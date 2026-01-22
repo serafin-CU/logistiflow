@@ -251,6 +251,35 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-900 mb-2">Import from Google Sheets</p>
+              <p className="text-xs text-blue-700 mb-3">
+                This will delete all existing rings and import fresh data from the configured spreadsheet.
+              </p>
+              <Button
+                onClick={async () => {
+                  if (!confirm('This will delete ALL existing rings and import new data. Continue?')) return;
+                  setIsUploading(true);
+                  try {
+                    const response = await base44.functions.invoke('importRingsFromSheet');
+                    if (response.data.success) {
+                      alert(`✅ Successfully imported ${response.data.imported} rings (deleted ${response.data.deleted} old records)`);
+                      queryClient.invalidateQueries({ queryKey: ["rings"] });
+                    } else {
+                      alert(`❌ Import failed: ${response.data.error}`);
+                    }
+                  } catch (error) {
+                    alert(`❌ Error: ${error.message}`);
+                  } finally {
+                    setIsUploading(false);
+                  }
+                }}
+                disabled={isUploading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isUploading ? "Importing..." : "Import from Google Sheets"}
+              </Button>
+            </div>
             <div>
               <label className="text-sm font-medium text-slate-700 mb-2 block">
                 Paste CSV Data (from Google Sheets)
