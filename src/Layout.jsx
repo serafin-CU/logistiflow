@@ -10,6 +10,7 @@ const navItems = [
   { name: "Dashboard", page: "Dashboard", icon: LayoutDashboard },
   { name: "Deliveries", page: "Deliveries", icon: Package },
   { name: "Alerts", page: "Alerts", icon: AlertTriangle },
+  { name: "Rings", page: "RingManagement", icon: MapPin },
   { name: "Settings", page: "Settings", icon: Settings }
 ];
 

@@ -15,7 +15,7 @@ import MetricCard from "@/components/dashboard/MetricCard";
 import RiskChart from "@/components/dashboard/RiskChart";
 import AlertCard from "@/components/dashboard/AlertCard";
 import DeliveryRow from "@/components/dashboard/DeliveryRow";
-import WeatherRiskMap from "@/components/map/WeatherRiskMap";
+import InteractiveWeatherMap from "@/components/map/InteractiveWeatherMap";
 import AddDeliveryModal from "@/components/delivery/AddDeliveryModal";
 import DeliveryDetailSheet from "@/components/delivery/DeliveryDetailSheet";
 import BulkUploadModal from "@/components/upload/BulkUploadModal";
@@ -23,6 +23,7 @@ import ManagerBriefing from "@/components/briefing/ManagerBriefing";
 
 const Delivery = base44.entities.Delivery;
 const WeatherAlert = base44.entities.WeatherAlert;
+const Ring = base44.entities.Ring;
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
@@ -45,6 +46,12 @@ export default function Dashboard() {
   const { data: alerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: ["alerts"],
     queryFn: () => WeatherAlert.filter({ is_active: true }, "-created_date", 50)
+  });
+
+  // Fetch rings
+  const { data: rings = [] } = useQuery({
+    queryKey: ["rings"],
+    queryFn: () => Ring.filter({ is_active: true })
   });
 
   // Calculate risk using AI
@@ -131,58 +138,11 @@ export default function Dashboard() {
     }
   });
 
-  // Refresh weather alerts from NWS
+  // Refresh weather alerts from weather.gov
   const refreshWeatherAlerts = async () => {
     setIsRefreshingAlerts(true);
     try {
-      const response = await base44.integrations.Core.InvokeLLM({
-        prompt: `Get the current active weather alerts for the United States. 
-        Search for real-time weather alerts, warnings, and watches from the National Weather Service or weather.gov.
-        Include alerts like winter storms, severe thunderstorms, tornados, hurricanes, heat waves, flooding, etc.
-        Return up to 10 most significant active alerts.`,
-        add_context_from_internet: true,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            alerts: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  event: { type: "string" },
-                  severity: { type: "string", enum: ["minor", "moderate", "severe", "extreme"] },
-                  headline: { type: "string" },
-                  description: { type: "string" },
-                  affected_states: { type: "array", items: { type: "string" } },
-                  end_time: { type: "string" }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // Clear old alerts and create new ones
-      const existingAlerts = await WeatherAlert.list();
-      for (const alert of existingAlerts) {
-        await WeatherAlert.delete(alert.id);
-      }
-
-      if (response?.alerts) {
-        for (const alert of response.alerts) {
-          await WeatherAlert.create({
-            alert_id: `NWS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            event: alert.event,
-            severity: alert.severity,
-            headline: alert.headline,
-            description: alert.description,
-            affected_states: alert.affected_states,
-            end_time: alert.end_time,
-            is_active: true
-          });
-        }
-      }
-
+      await base44.functions.invoke('fetchWeatherAlerts');
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
     } finally {
       setIsRefreshingAlerts(false);
@@ -324,9 +284,9 @@ export default function Dashboard() {
           <ManagerBriefing deliveries={deliveries} alerts={alerts} />
         </div>
 
-        {/* Map View - Full Width */}
+        {/* Interactive Map - Full Width */}
         <div className="mb-8">
-          <WeatherRiskMap alerts={alerts} deliveries={deliveries} />
+          <InteractiveWeatherMap rings={rings} alerts={alerts} />
         </div>
 
         {/* Chart */}
