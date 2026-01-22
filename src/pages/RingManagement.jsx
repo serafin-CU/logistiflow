@@ -95,9 +95,29 @@ export default function RingManagement() {
         
         const deliveryTimeDays = row.region_name?.includes('2D') ? 2 : 1;
 
+        // Map store to state abbreviation
+        const storeToState = {
+          'New York': 'NY',
+          'Los Angeles': 'CA',
+          'Chicago': 'IL',
+          'Houston': 'TX',
+          'Miami': 'FL',
+          'Boston': 'MA',
+          'Seattle': 'WA',
+          'Denver': 'CO',
+          'Atlanta': 'GA',
+          'Phoenix': 'AZ',
+          'San Francisco': 'CA',
+          'Philadelphia': 'PA',
+          'Dallas': 'TX',
+          'San Diego': 'CA',
+          'San Jose': 'CA'
+        };
+
         ringData.push({
           ring_id: row.ring_id,
           store: row.store,
+          state: storeToState[row.store] || row.state || null,
           facility_center: row.facility_center || null,
           region_name: row.region_name || null,
           delivery_days: deliveryDays,
