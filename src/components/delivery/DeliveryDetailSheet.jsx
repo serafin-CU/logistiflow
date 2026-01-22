@@ -1,11 +1,15 @@
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { format } from "date-fns";
-import { MapPin, Calendar, Package, AlertTriangle, Trash2, RefreshCw } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { format, isPast, parseISO } from "date-fns";
+import { MapPin, Calendar, Package, AlertTriangle, Trash2, RefreshCw, Star, CheckCircle } from "lucide-react";
 import RiskBadge from "../dashboard/RiskBadge";
 import { motion } from "framer-motion";
+import { base44 } from "@/api/base44Client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const statusColors = {
   scheduled: "bg-slate-100 text-slate-700 border-slate-200",
@@ -23,7 +27,52 @@ export default function DeliveryDetailSheet({
   onRefreshRisk,
   isRefreshing 
 }) {
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [feedback, setFeedback] = useState("");
+  const [hoveredStar, setHoveredStar] = useState(0);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const currentUser = await base44.auth.me();
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Failed to load user:", error);
+      }
+    };
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    if (delivery) {
+      setRating(delivery.prediction_accuracy || 0);
+      setFeedback(delivery.prediction_feedback || "");
+    }
+  }, [delivery]);
+
+  const submitRatingMutation = useMutation({
+    mutationFn: async () => {
+      await base44.entities.Delivery.update(delivery.id, {
+        prediction_accuracy: rating,
+        prediction_feedback: feedback,
+        rated_by: user.email,
+        rated_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
+    }
+  });
+
   if (!delivery) return null;
+
+  const deliveryDate = delivery.delivery_date ? parseISO(delivery.delivery_date) : null;
+  const isDeliveryPast = deliveryDate ? isPast(deliveryDate) : false;
+  const isAdmin = user?.role === "admin";
+  const canRate = isAdmin && isDeliveryPast;
+  const hasRated = delivery.prediction_accuracy && delivery.rated_by;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -152,6 +201,80 @@ export default function DeliveryDetailSheet({
                 <h4 className="font-semibold text-slate-900">Notes</h4>
                 <p className="text-sm text-slate-600">{delivery.notes}</p>
               </div>
+            </>
+          )}
+
+          {/* Prediction Rating - Admin Only, After Delivery Date */}
+          {canRate && (
+            <>
+              <Separator />
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl space-y-4 border border-blue-200"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-slate-900">Rate AI Prediction</h4>
+                  {hasRated && (
+                    <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Rated
+                    </Badge>
+                  )}
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-slate-600 mb-2">How accurate was our risk prediction?</p>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          onClick={() => setRating(star)}
+                          onMouseEnter={() => setHoveredStar(star)}
+                          onMouseLeave={() => setHoveredStar(0)}
+                          className="transition-transform hover:scale-110"
+                        >
+                          <Star
+                            className={`w-8 h-8 ${
+                              star <= (hoveredStar || rating)
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-slate-300"
+                            }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-slate-600 mb-2 block">
+                      Feedback (optional)
+                    </label>
+                    <Textarea
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      placeholder="What could we improve in our predictions?"
+                      rows={3}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {hasRated && (
+                    <div className="text-xs text-slate-500">
+                      Rated by {delivery.rated_by} on {format(new Date(delivery.rated_at), "MMM d, yyyy 'at' h:mm a")}
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={() => submitRatingMutation.mutate()}
+                    disabled={rating === 0 || submitRatingMutation.isPending}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {submitRatingMutation.isPending ? "Saving..." : hasRated ? "Update Rating" : "Submit Rating"}
+                  </Button>
+                </div>
+              </motion.div>
             </>
           )}
 
