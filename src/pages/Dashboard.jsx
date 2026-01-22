@@ -322,6 +322,11 @@ Return risk score (0-100) and level (low/medium/high/critical).`,
           </div>
         )}
 
+        {/* Ring Briefing Section */}
+        {rings.length > 0 && (
+          <RingBriefing rings={rings} alerts={alerts} />
+        )}
+
         {/* Interactive Map - Full Width */}
         <div className="mb-8">
           <InteractiveWeatherMap rings={rings} alerts={alerts} />
