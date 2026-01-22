@@ -380,24 +380,28 @@ export default function Dashboard() {
           </div>
 
           {upcomingDeliveries.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-700 font-medium mb-2">Upload upcoming tasks, with Ring ID, shipping or delivery date, so that we can assess correctly</p>
-              <div className="flex items-center justify-center gap-3 mt-4">
-                <Button
-                  onClick={() => setShowBulkModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  Import CSV
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddModal(true)}
-                >
-                  Add Manually
-                </Button>
+            <div className="space-y-6">
+              <div className="text-center py-8 bg-white rounded-xl border border-slate-200">
+                <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-700 font-medium mb-2">Upload upcoming tasks, with Ring ID, shipping or delivery date, so that we can assess correctly</p>
+                <div className="flex items-center justify-center gap-3 mt-4">
+                  <Button
+                    onClick={() => setShowBulkModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Import CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAddModal(true)}
+                  >
+                    Add Manually
+                  </Button>
+                </div>
               </div>
+              
+              <RingWeatherForecast rings={rings} alerts={alerts} />
             </div>
           ) : filteredDeliveries.length > 0 ? (
             <div className="space-y-2">
