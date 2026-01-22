@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Upload, MapPin, Store, Clock, Calendar, Download, Plus } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import RingMapVisualization from "@/components/ring/RingMapVisualization";
 
 const Ring = base44.entities.Ring;
+const WeatherAlert = base44.entities.WeatherAlert;
 
 export default function RingManagement() {
   const queryClient = useQueryClient();
@@ -124,6 +126,11 @@ export default function RingManagement() {
   const { data: rings = [], isLoading } = useQuery({
     queryKey: ["rings"],
     queryFn: () => Ring.list("-created_date", 500)
+  });
+
+  const { data: alerts = [] } = useQuery({
+    queryKey: ["alerts"],
+    queryFn: () => WeatherAlert.filter({ is_active: true })
   });
 
   const importFromCSV = async () => {
@@ -266,6 +273,11 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
             </div>
           </CardContent>
         </Card>
+
+        {/* Map Visualization */}
+        <div className="mb-8">
+          <RingMapVisualization rings={rings} alerts={alerts} />
+        </div>
 
         {/* Rings by Store */}
         <div className="space-y-6">
