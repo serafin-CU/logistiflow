@@ -1,12 +1,17 @@
 import { useState, useMemo } from "react";
-import { MapContainer, TileLayer, Circle, Popup, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Popup, CircleMarker, Marker } from 'react-leaflet';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, AlertTriangle, Clock, Package } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MapPin, AlertTriangle, Clock, Package, Filter } from "lucide-react";
+import { format, parseISO, isAfter, isBefore, addDays, startOfDay, endOfDay } from "date-fns";
+import L from 'leaflet';
 
 export default function RingMapVisualization({ rings = [], alerts = [] }) {
   const [selectedStore, setSelectedStore] = useState("all");
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [dateRangeFilter, setDateRangeFilter] = useState("all");
 
   // Get unique stores
   const stores = useMemo(() => {
@@ -20,35 +25,126 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
     return rings.filter(r => r.store === selectedStore);
   }, [rings, selectedStore]);
 
-  // Determine ring color based on active alerts in the area
-  const getRingAlertStatus = (ring) => {
-    if (!ring.latitude || !ring.longitude || !alerts.length) {
-      return { severity: 'none', color: '#10B981' }; // Green - no alerts
+  // Filter alerts by severity and date range
+  const filteredAlerts = useMemo(() => {
+    let filtered = alerts.filter(a => a.is_active);
+
+    // Severity filter
+    if (severityFilter !== "all") {
+      filtered = filtered.filter(a => a.severity === severityFilter);
     }
 
-    // Simple state-based matching (could be enhanced with actual geographic matching)
-    const stateMap = {
-      'New York': 'NY',
-      'Los Angeles': 'CA',
-      'Chicago': 'IL',
-      'Houston': 'TX',
-      'Miami': 'FL',
-      'Boston': 'MA',
-      'Seattle': 'WA',
-      'Denver': 'CO',
-      'Atlanta': 'GA',
-      'Phoenix': 'AZ'
+    // Date range filter
+    const now = new Date();
+    if (dateRangeFilter === "today") {
+      filtered = filtered.filter(alert => {
+        const start = alert.start_time ? parseISO(alert.start_time) : null;
+        const end = alert.end_time ? parseISO(alert.end_time) : null;
+        const today = startOfDay(now);
+        const todayEnd = endOfDay(now);
+        if (start && end) {
+          return (isBefore(start, todayEnd) && isAfter(end, today));
+        }
+        return true;
+      });
+    } else if (dateRangeFilter === "week") {
+      const weekEnd = addDays(now, 7);
+      filtered = filtered.filter(alert => {
+        const start = alert.start_time ? parseISO(alert.start_time) : null;
+        if (start) {
+          return isBefore(start, weekEnd);
+        }
+        return true;
+      });
+    }
+
+    return filtered;
+  }, [alerts, severityFilter, dateRangeFilter]);
+
+  // Create custom alert icons
+  const createAlertIcon = (severity) => {
+    const colorMap = {
+      extreme: '#DC2626',
+      severe: '#EA580C',
+      moderate: '#F59E0B',
+      minor: '#3B82F6'
+    };
+    
+    const color = colorMap[severity] || '#3B82F6';
+    
+    return L.divIcon({
+      html: `
+        <div style="
+          background-color: ${color};
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+      `,
+      className: '',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      popupAnchor: [0, -14]
+    });
+  };
+
+  // Get geographic center for alerts (simplified - using affected states)
+  const getAlertLocations = (alert) => {
+    // Map states to approximate center coordinates
+    const stateCoordinates = {
+      'NY': [42.6526, -73.7562],
+      'CA': [36.7783, -119.4179],
+      'IL': [40.6331, -89.3985],
+      'TX': [31.9686, -99.9018],
+      'FL': [27.6648, -81.5158],
+      'MA': [42.4072, -71.3824],
+      'WA': [47.7511, -120.7401],
+      'CO': [39.5501, -105.7821],
+      'GA': [32.1656, -82.9001],
+      'AZ': [34.0489, -111.0937],
+      'PA': [41.2033, -77.1945]
     };
 
-    const ringState = stateMap[ring.store];
-    if (!ringState) return { severity: 'none', color: '#10B981' };
+    const locations = [];
+    
+    if (alert.affected_states) {
+      alert.affected_states.forEach(state => {
+        if (stateCoordinates[state]) {
+          locations.push({
+            coordinates: stateCoordinates[state],
+            alert: alert
+          });
+        }
+      });
+    }
 
-    const ringAlerts = alerts.filter(alert => 
-      alert.is_active && alert.affected_states?.includes(ringState)
+    return locations;
+  };
+
+  // Determine ring color based on active alerts in the area
+  const getRingAlertStatus = (ring) => {
+    if (!ring.latitude || !ring.longitude || !filteredAlerts.length) {
+      return { severity: 'none', color: '#10B981', alerts: [] };
+    }
+
+    const ringAlerts = filteredAlerts.filter(alert => 
+      alert.affected_states?.includes(ring.state) || 
+      alert.affected_zones?.some(zone => ring.zones?.includes(zone))
     );
 
     if (ringAlerts.length === 0) {
-      return { severity: 'none', color: '#10B981' }; // Green
+      return { severity: 'none', color: '#10B981', alerts: [] };
     }
 
     // Find highest severity
@@ -59,17 +155,18 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
     }, { severity: 'none', level: 0 });
 
     const severityColors = {
-      extreme: '#DC2626',  // Red
-      severe: '#EA580C',   // Orange
-      moderate: '#F59E0B', // Amber
-      minor: '#3B82F6',    // Blue
-      none: '#10B981'      // Green
+      extreme: '#DC2626',
+      severe: '#EA580C',
+      moderate: '#F59E0B',
+      minor: '#3B82F6',
+      none: '#10B981'
     };
 
     return {
       severity: maxSeverity.severity,
       color: severityColors[maxSeverity.severity] || '#10B981',
-      alertCount: ringAlerts.length
+      alertCount: ringAlerts.length,
+      alerts: ringAlerts
     };
   };
 
@@ -84,7 +181,7 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <CardTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-purple-600" />
             Delivery Zone Coverage Map
@@ -101,6 +198,40 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Alert Filters */}
+        <div className="space-y-3 mb-3">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-medium text-slate-700">Filter Alerts:</span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-slate-500 mb-1.5">Severity</p>
+              <Tabs value={severityFilter} onValueChange={setSeverityFilter}>
+                <TabsList className="grid grid-cols-5 w-full">
+                  <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+                  <TabsTrigger value="minor" className="text-xs">Minor</TabsTrigger>
+                  <TabsTrigger value="moderate" className="text-xs">Mod</TabsTrigger>
+                  <TabsTrigger value="severe" className="text-xs">Severe</TabsTrigger>
+                  <TabsTrigger value="extreme" className="text-xs">Extreme</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <div>
+              <p className="text-xs text-slate-500 mb-1.5">Time Range</p>
+              <Tabs value={dateRangeFilter} onValueChange={setDateRangeFilter}>
+                <TabsList className="grid grid-cols-3 w-full">
+                  <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+                  <TabsTrigger value="today" className="text-xs">Today</TabsTrigger>
+                  <TabsTrigger value="week" className="text-xs">7 Days</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3 mt-3 text-xs">
@@ -203,7 +334,7 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
 
                           {alertStatus.severity !== 'none' && (
                             <div className="pt-1 border-t border-slate-200">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 mb-2">
                                 <AlertTriangle className="w-3 h-3 text-amber-600" />
                                 <Badge 
                                   className="text-xs capitalize"
@@ -215,9 +346,19 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
                                   {alertStatus.severity} Alert
                                 </Badge>
                               </div>
-                              <p className="text-slate-600 mt-1">
-                                {alertStatus.alertCount} active alert(s)
+                              <p className="text-slate-600 mb-1">
+                                {alertStatus.alertCount} active alert(s):
                               </p>
+                              {alertStatus.alerts.slice(0, 2).map((alert, idx) => (
+                                <p key={idx} className="text-xs text-slate-600 truncate">
+                                  • {alert.event}
+                                </p>
+                              ))}
+                              {alertStatus.alerts.length > 2 && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                  +{alertStatus.alerts.length - 2} more
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -246,6 +387,90 @@ export default function RingMapVisualization({ rings = [], alerts = [] }) {
                     }}
                   />
                 );
+              })}
+
+              {/* Alert markers on map */}
+              {filteredAlerts.map((alert) => {
+                const locations = getAlertLocations(alert);
+                
+                return locations.map((location, idx) => (
+                  <Marker
+                    key={`alert-${alert.id}-${idx}`}
+                    position={location.coordinates}
+                    icon={createAlertIcon(alert.severity)}
+                  >
+                    <Popup maxWidth={300}>
+                      <div className="p-2 min-w-[250px]">
+                        <div className="flex items-start gap-2 mb-2">
+                          <AlertTriangle className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
+                            alert.severity === 'extreme' ? 'text-red-600' :
+                            alert.severity === 'severe' ? 'text-orange-600' :
+                            alert.severity === 'moderate' ? 'text-yellow-600' :
+                            'text-blue-600'
+                          }`} />
+                          <div className="flex-1">
+                            <p className="font-bold text-slate-900">{alert.event}</p>
+                            <Badge 
+                              variant="outline" 
+                              className={`mt-1 capitalize ${
+                                alert.severity === 'extreme' ? 'border-red-600 text-red-700' :
+                                alert.severity === 'severe' ? 'border-orange-600 text-orange-700' :
+                                alert.severity === 'moderate' ? 'border-yellow-600 text-yellow-700' :
+                                'border-blue-600 text-blue-700'
+                              }`}
+                            >
+                              {alert.severity}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-slate-700 mb-3">{alert.headline}</p>
+                        
+                        {alert.description && (
+                          <p className="text-xs text-slate-600 mb-3 line-clamp-3">
+                            {alert.description}
+                          </p>
+                        )}
+                        
+                        <div className="space-y-1 text-xs border-t border-slate-200 pt-2">
+                          {alert.start_time && (
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span className="text-slate-600">Starts:</span>
+                              <span className="font-medium">
+                                {format(parseISO(alert.start_time), 'MMM d, h:mm a')}
+                              </span>
+                            </div>
+                          )}
+                          {alert.end_time && (
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span className="text-slate-600">Ends:</span>
+                              <span className="font-medium">
+                                {format(parseISO(alert.end_time), 'MMM d, h:mm a')}
+                              </span>
+                            </div>
+                          )}
+                          {alert.affected_states && (
+                            <div className="flex items-start gap-1.5 mt-2">
+                              <MapPin className="w-3 h-3 text-slate-400 mt-0.5" />
+                              <div>
+                                <span className="text-slate-600">Affected States:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {alert.affected_states.map(state => (
+                                    <Badge key={state} variant="outline" className="text-xs">
+                                      {state}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ));
               })}
             </MapContainer>
           </div>
