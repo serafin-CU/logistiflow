@@ -13,7 +13,6 @@ const Ring = base44.entities.Ring;
 const WeatherAlert = base44.entities.WeatherAlert;
 
 export default function RingManagement() {
-  const queryClient = useQueryClient();
   const [selectedRing, setSelectedRing] = useState(null);
 
   const { data: rings = [], isLoading } = useQuery({
