@@ -1,10 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MapContainer, TileLayer, Circle, Popup, useMapEvents, Marker } from 'react-leaflet';
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Loader2, MapPin, AlertTriangle, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Loader2, MapPin, AlertTriangle, CheckCircle, Clock, XCircle, Eye, EyeOff } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import 'leaflet/dist/leaflet.css';
 
@@ -41,6 +43,8 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [clickedPosition, setClickedPosition] = useState(null);
   const [selectedRing, setSelectedRing] = useState(null);
+  const [showRadar, setShowRadar] = useState(false);
+  const [radarOpacity, setRadarOpacity] = useState(0.6);
 
   // Check if alert affects this ring
   const getRingAlerts = (ring) => {
@@ -59,16 +63,17 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
     });
   };
 
-  // Check if alert affects upcoming delivery days
-  const alertAffectsDelivery = (alert, ring) => {
-    if (!alert.start_time || !alert.end_time || !ring.delivery_days) return false;
+  // Check if alert affects upcoming delivery days and return affected dates
+  const getAffectedDeliveryDays = (alert, ring) => {
+    if (!alert.start_time || !alert.end_time || !ring.delivery_days) return [];
     
     const alertStart = new Date(alert.start_time);
     const alertEnd = new Date(alert.end_time);
     const today = new Date();
+    const affectedDays = [];
     
-    // Check next 7 days for delivery day conflicts
-    for (let i = 0; i < 7; i++) {
+    // Check next 14 days for delivery day conflicts
+    for (let i = 0; i < 14; i++) {
       const checkDate = new Date(today);
       checkDate.setDate(today.getDate() + i);
       
@@ -77,12 +82,21 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
       if (ring.delivery_days.includes(dayName)) {
         // Check if alert overlaps with this delivery day
         if (checkDate >= alertStart && checkDate <= alertEnd) {
-          return true;
+          affectedDays.push({
+            date: checkDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            dayName: dayName,
+            fullDate: checkDate
+          });
         }
       }
     }
     
-    return false;
+    return affectedDays;
+  };
+
+  // Check if alert affects upcoming delivery days
+  const alertAffectsDelivery = (alert, ring) => {
+    return getAffectedDeliveryDays(alert, ring).length > 0;
   };
 
   const handleMapClick = async (latlng) => {
@@ -156,6 +170,17 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
                   {ringsWithAlerts.filter(r => r.hasDeliveryConflict).length} Delivery Conflicts
                 </span>
               </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200">
+                <Switch 
+                  id="radar-toggle" 
+                  checked={showRadar} 
+                  onCheckedChange={setShowRadar}
+                />
+                <Label htmlFor="radar-toggle" className="cursor-pointer">
+                  {showRadar ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  <span className="ml-1">Radar</span>
+                </Label>
+              </div>
             </div>
           </div>
         </div>
@@ -172,6 +197,16 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
                 attribution='&copy; OpenStreetMap'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              
+              {/* NOAA Radar Layer */}
+              {showRadar && (
+                <TileLayer
+                  url="https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/tile/{z}/{y}/{x}"
+                  attribution='NOAA'
+                  opacity={radarOpacity}
+                  zIndex={1000}
+                />
+              )}
               
               <MapClickHandler onMapClick={handleMapClick} />
 
@@ -312,14 +347,14 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
                     <div className="text-xs font-semibold text-slate-700 mb-2">
                       Active Weather Alerts ({selectedRing.ringAlerts.length})
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {selectedRing.ringAlerts.map((alert, i) => {
-                        const affectsDelivery = alertAffectsDelivery(alert, selectedRing);
+                        const affectedDays = getAffectedDeliveryDays(alert, selectedRing);
                         return (
-                          <div key={i} className={`p-2 rounded-lg border text-xs ${
-                            affectsDelivery ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
+                          <div key={i} className={`p-3 rounded-lg border ${
+                            affectedDays.length > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
                           }`}>
-                            <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center justify-between mb-2">
                               <Badge className={`text-[10px] ${
                                 alert.severity === 'extreme' ? 'bg-red-600' :
                                 alert.severity === 'severe' ? 'bg-orange-600' :
@@ -328,15 +363,45 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
                               }`}>
                                 {alert.severity}
                               </Badge>
-                              {affectsDelivery && <AlertTriangle className="w-3 h-3 text-red-600" />}
+                              {affectedDays.length > 0 && <AlertTriangle className="w-3 h-3 text-red-600" />}
                             </div>
-                            <div className="font-medium text-slate-900">{alert.event}</div>
-                            <div className="text-slate-600 mt-1">
-                              {new Date(alert.start_time).toLocaleDateString()} - {new Date(alert.end_time).toLocaleDateString()}
+                            
+                            <div className="font-semibold text-slate-900 text-sm mb-1">{alert.event}</div>
+                            
+                            {alert.headline && (
+                              <div className="text-xs text-slate-700 mb-2 font-medium">
+                                {alert.headline}
+                              </div>
+                            )}
+                            
+                            {alert.description && (
+                              <div className="text-xs text-slate-600 mb-2 line-clamp-3">
+                                {alert.description}
+                              </div>
+                            )}
+                            
+                            <div className="text-xs text-slate-500 mb-2">
+                              <div className="font-medium">Active Period:</div>
+                              <div>Start: {new Date(alert.start_time).toLocaleString('en-US', { 
+                                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+                              })}</div>
+                              <div>End: {new Date(alert.end_time).toLocaleString('en-US', { 
+                                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+                              })}</div>
                             </div>
-                            {affectsDelivery && (
-                              <div className="text-red-600 font-semibold mt-1">
-                                ⚠️ Conflicts with delivery schedule
+                            
+                            {affectedDays.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-red-300">
+                                <div className="text-xs font-semibold text-red-700 mb-1">
+                                  ⚠️ Impacted Delivery Days:
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {affectedDays.map((day, idx) => (
+                                    <Badge key={idx} className="bg-red-600 text-white text-[10px]">
+                                      {day.dayName} ({day.date})
+                                    </Badge>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>
