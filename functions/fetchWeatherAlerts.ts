@@ -14,6 +14,13 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        // Fetch all rings to identify zones and states to monitor
+        const rings = await base44.asServiceRole.entities.Ring.list();
+        const monitoredStates = [...new Set(rings.map(r => r.state).filter(Boolean))];
+        const monitoredZones = [...new Set(rings.flatMap(r => r.zones || []))];
+
+        console.log(`Monitoring ${monitoredStates.length} states and ${monitoredZones.length} zones`);
+
         // Fetch active alerts from NWS API
         const response = await fetch('https://api.weather.gov/alerts/active', {
             headers: {
@@ -29,7 +36,7 @@ Deno.serve(async (req) => {
         const data = await response.json();
         const alerts = data.features || [];
 
-        console.log(`Fetched ${alerts.length} active alerts from NWS`);
+        console.log(`Fetched ${alerts.length} total alerts from NWS`);
 
         // Clear existing alerts
         const existingAlerts = await base44.asServiceRole.entities.WeatherAlert.list();
@@ -42,14 +49,28 @@ Deno.serve(async (req) => {
         for (const feature of alerts) {
             const props = feature.properties;
             
-            // Extract affected states from affected zones
-            const affectedStates = new Set();
+            // Extract zone codes from affectedZones URLs
+            const affectedZones = (props.affectedZones || [])
+                .map(url => url.split('/').pop())
+                .filter(Boolean);
+
+            // Extract state information from areaDesc
+            const affectedStates = [];
             if (props.areaDesc) {
-                // Extract state abbreviations from area description
                 const stateMatches = props.areaDesc.match(/\b[A-Z]{2}\b/g);
                 if (stateMatches) {
-                    stateMatches.forEach(state => affectedStates.add(state));
+                    affectedStates.push(...stateMatches);
                 }
+            }
+
+            // Check if this alert affects any of our monitored zones or states
+            const isRelevant = 
+                affectedZones.some(zone => monitoredZones.includes(zone)) ||
+                affectedStates.some(state => monitoredStates.includes(state)) ||
+                monitoredStates.length === 0; // If no rings yet, keep all alerts
+
+            if (!isRelevant) {
+                continue; // Skip alerts not relevant to our delivery areas
             }
 
             // Map NWS severity to our system
@@ -67,8 +88,8 @@ Deno.serve(async (req) => {
                 severity: severityMap[props.severity] || 'minor',
                 headline: props.headline || '',
                 description: props.description || '',
-                affected_states: Array.from(affectedStates),
-                affected_zones: props.affectedZones || [],
+                affected_states: [...new Set(affectedStates)], // Remove duplicates
+                affected_zones: affectedZones,
                 start_time: props.effective || new Date().toISOString(),
                 end_time: props.expires || null,
                 is_active: true
@@ -78,12 +99,14 @@ Deno.serve(async (req) => {
             processedAlerts.push(created);
         }
 
-        console.log(`Stored ${processedAlerts.length} alerts in database`);
+        console.log(`Stored ${processedAlerts.length} relevant alerts in database`);
 
         return Response.json({
             success: true,
-            alerts_fetched: alerts.length,
-            alerts_stored: processedAlerts.length,
+            total_alerts_fetched: alerts.length,
+            relevant_alerts_stored: processedAlerts.length,
+            monitored_states: monitoredStates.length,
+            monitored_zones: monitoredZones.length,
             timestamp: new Date().toISOString()
         });
 

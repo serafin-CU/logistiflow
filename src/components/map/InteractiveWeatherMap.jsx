@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Loader2, MapPin, AlertTriangle, CheckCircle, Clock, XCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import 'leaflet/dist/leaflet.css';
 
 function MapClickHandler({ onMapClick }) {
   useMapEvents({
@@ -39,12 +40,56 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
   const [analysisData, setAnalysisData] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [clickedPosition, setClickedPosition] = useState(null);
-  const [showWeatherLayer, setShowWeatherLayer] = useState(true);
+  const [selectedRing, setSelectedRing] = useState(null);
+
+  // Check if alert affects this ring
+  const getRingAlerts = (ring) => {
+    if (!ring.zones || !alerts.length) return [];
+    
+    return alerts.filter(alert => {
+      if (!alert.is_active) return false;
+      
+      // Check if alert affects this ring's zones or state
+      const affectsZone = alert.affected_zones?.some(zone => ring.zones.includes(zone));
+      const affectsState = alert.affected_states?.some(state => 
+        ring.state?.toUpperCase() === state || state.includes(ring.state)
+      );
+      
+      return affectsZone || affectsState;
+    });
+  };
+
+  // Check if alert affects upcoming delivery days
+  const alertAffectsDelivery = (alert, ring) => {
+    if (!alert.start_time || !alert.end_time || !ring.delivery_days) return false;
+    
+    const alertStart = new Date(alert.start_time);
+    const alertEnd = new Date(alert.end_time);
+    const today = new Date();
+    
+    // Check next 7 days for delivery day conflicts
+    for (let i = 0; i < 7; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() + i);
+      
+      const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' });
+      
+      if (ring.delivery_days.includes(dayName)) {
+        // Check if alert overlaps with this delivery day
+        if (checkDate >= alertStart && checkDate <= alertEnd) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  };
 
   const handleMapClick = async (latlng) => {
     setClickedPosition(latlng);
     setIsAnalyzing(true);
     setAnalysisData(null);
+    setSelectedRing(null);
     
     try {
       const response = await base44.functions.invoke('analyzeRingRisk', {
@@ -63,53 +108,23 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
     }
   };
 
-  // Alert coverage circles
-  const getAlertCircles = () => {
-    const circles = [];
-    const stateCoords = {
-      'NY': [40.7128, -74.0060], 'CA': [36.7783, -119.4179], 'TX': [31.9686, -99.9018],
-      'FL': [27.6648, -81.5158], 'IL': [40.6331, -89.3985], 'PA': [41.2033, -77.1945],
-      'OH': [40.4173, -82.9071], 'GA': [32.1656, -82.9001], 'NC': [35.7596, -79.0193],
-      'MI': [44.3148, -85.6024], 'NJ': [40.0583, -74.4057], 'VA': [37.4316, -78.6569],
-      'WA': [47.7511, -120.7401], 'MA': [42.4072, -71.3824], 'AZ': [34.0489, -111.0937],
-      'TN': [35.5175, -86.5804], 'IN': [40.2672, -86.1349], 'MO': [37.9643, -91.8318],
-      'MD': [39.0458, -76.6413], 'WI': [43.7844, -88.7879], 'CO': [39.5501, -105.7821],
-      'MN': [46.7296, -94.6859], 'SC': [33.8361, -81.1637], 'AL': [32.3182, -86.9023]
-    };
-
-    alerts.forEach((alert, idx) => {
-      alert.affected_states?.forEach(state => {
-        const coords = stateCoords[state];
-        if (coords) {
-          const severityRadius = {
-            extreme: 150000,
-            severe: 120000,
-            moderate: 100000,
-            minor: 80000
-          };
-          
-          const severityColor = {
-            extreme: '#DC2626',
-            severe: '#EA580C',
-            moderate: '#F59E0B',
-            minor: '#3B82F6'
-          };
-
-          circles.push({
-            key: `${alert.id}-${state}`,
-            center: coords,
-            radius: severityRadius[alert.severity] || 100000,
-            color: severityColor[alert.severity] || '#3B82F6',
-            alert
-          });
-        }
-      });
-    });
-
-    return circles;
+  const handleRingClick = (e, ring) => {
+    e.originalEvent.stopPropagation();
+    setSelectedRing(ring);
+    setClickedPosition(null);
+    setAnalysisData(null);
   };
 
-  const alertCircles = getAlertCircles();
+  // Calculate rings with delivery conflicts
+  const ringsWithAlerts = rings.map(ring => {
+    const ringAlerts = getRingAlerts(ring);
+    const hasDeliveryConflict = ringAlerts.some(alert => alertAffectsDelivery(alert, ring));
+    const maxSeverity = Math.max(
+      ...ringAlerts.map(a => ({ minor: 1, moderate: 2, severe: 3, extreme: 4 }[a.severity] || 0)),
+      0
+    );
+    return { ...ring, ringAlerts, hasDeliveryConflict, maxSeverity };
+  });
 
   return (
     <div className="relative">
@@ -130,19 +145,16 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <Button
-                variant={showWeatherLayer ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowWeatherLayer(!showWeatherLayer)}
-                className="text-xs"
-              >
-                {showWeatherLayer ? "Hide" : "Show"} Weather Layer
-              </Button>
               <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200">
                 <span className="text-slate-600">{alerts.length} Active Alerts</span>
               </div>
               <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200">
                 <span className="text-slate-600">{rings.length} Rings</span>
+              </div>
+              <div className="px-3 py-1.5 bg-red-50 rounded-lg border border-red-200">
+                <span className="text-red-700 font-semibold">
+                  {ringsWithAlerts.filter(r => r.hasDeliveryConflict).length} Delivery Conflicts
+                </span>
               </div>
             </div>
           </div>
@@ -161,39 +173,82 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               
-              {/* Weather Radar Layer - Live Precipitation */}
-              {showWeatherLayer && (
-                <TileLayer
-                  url="https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=439d4b804bc8187953eb36d2a8c26a02"
-                  attribution='Weather data &copy; OpenWeatherMap'
-                  opacity={0.6}
-                />
-              )}
-              
               <MapClickHandler onMapClick={handleMapClick} />
 
-              {/* Alert Coverage Circles */}
-              {alertCircles.map(circle => (
-                <Circle
-                  key={circle.key}
-                  center={circle.center}
-                  radius={circle.radius}
-                  pathOptions={{
-                    color: circle.color,
-                    fillColor: circle.color,
-                    fillOpacity: 0.15,
-                    weight: 2,
-                    opacity: 0.6
-                  }}
-                >
-                  <Popup>
-                    <div className="p-2">
-                      <p className="font-semibold text-sm">{circle.alert.event}</p>
-                      <p className="text-xs text-slate-600 capitalize">{circle.alert.severity} severity</p>
-                    </div>
-                  </Popup>
-                </Circle>
-              ))}
+              {/* Delivery Rings with Alert Integration */}
+              {ringsWithAlerts.map((ringData, idx) => {
+                if (!ringData.latitude || !ringData.longitude) return null;
+
+                const colorMap = {
+                  0: '#3b82f6',  // blue - no alerts
+                  1: '#10b981',  // green - minor
+                  2: '#f59e0b',  // yellow - moderate
+                  3: '#f97316',  // orange - severe
+                  4: '#ef4444'   // red - extreme
+                };
+
+                const color = ringData.hasDeliveryConflict ? colorMap[ringData.maxSeverity] : colorMap[0];
+
+                return (
+                  <Circle
+                    key={idx}
+                    center={[ringData.latitude, ringData.longitude]}
+                    radius={10000}
+                    pathOptions={{
+                      fillColor: color,
+                      fillOpacity: ringData.hasDeliveryConflict ? 0.3 : 0.1,
+                      color: color,
+                      weight: ringData.hasDeliveryConflict ? 3 : 2
+                    }}
+                    eventHandlers={{
+                      click: (e) => handleRingClick(e, ringData)
+                    }}
+                  >
+                    <Popup>
+                      <div className="p-2 min-w-[220px]">
+                        <div className="font-semibold text-slate-900 mb-1">{ringData.ring_id}</div>
+                        <div className="text-sm text-slate-600">{ringData.store}</div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          Delivers: {ringData.delivery_days?.join(', ') || 'N/A'}
+                        </div>
+                        
+                        {ringData.ringAlerts.length > 0 && (
+                          <div className="mt-2 pt-2 border-t space-y-1">
+                            <div className="text-xs font-semibold text-slate-700">
+                              {ringData.ringAlerts.length} Active Alert{ringData.ringAlerts.length > 1 ? 's' : ''}
+                            </div>
+                            {ringData.ringAlerts.slice(0, 2).map((alert, i) => (
+                              <div key={i} className="flex items-center gap-1 text-xs">
+                                <Badge className={`text-[10px] px-1 py-0 ${
+                                  alert.severity === 'extreme' ? 'bg-red-600' :
+                                  alert.severity === 'severe' ? 'bg-orange-600' :
+                                  alert.severity === 'moderate' ? 'bg-yellow-600' :
+                                  'bg-blue-600'
+                                }`}>
+                                  {alert.severity}
+                                </Badge>
+                                <span className="text-slate-600">{alert.event}</span>
+                                {alertAffectsDelivery(alert, ringData) && (
+                                  <AlertTriangle className="w-3 h-3 text-red-600 ml-auto" />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {ringData.hasDeliveryConflict && (
+                          <div className="mt-2 pt-2 border-t">
+                            <div className="flex items-center gap-1 text-red-600 text-xs font-semibold">
+                              <AlertTriangle className="w-3 h-3" />
+                              Delivery Day Conflict!
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Popup>
+                  </Circle>
+                );
+              })}
 
               {/* Clicked Location Marker */}
               {clickedPosition && (
@@ -221,6 +276,84 @@ export default function InteractiveWeatherMap({ rings = [], alerts = [] }) {
           </AnimatePresence>
         </div>
       </motion.div>
+
+      {/* Selected Ring Details Panel */}
+      <AnimatePresence>
+        {selectedRing && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="absolute bottom-4 left-4 z-[1000] w-96"
+          >
+            <Card className="bg-white/95 backdrop-blur border-2 border-blue-200">
+              <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-white">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">{selectedRing.ring_id}</h3>
+                    <p className="text-sm text-slate-600">{selectedRing.store}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedRing(null)}>×</Button>
+                </div>
+              </div>
+              
+              <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+                <div>
+                  <div className="text-xs font-semibold text-slate-700 mb-1">Delivery Days</div>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedRing.delivery_days?.map((day, i) => (
+                      <Badge key={i} variant="outline" className="text-xs">{day}</Badge>
+                    )) || <span className="text-xs text-slate-500">None</span>}
+                  </div>
+                </div>
+                
+                {selectedRing.ringAlerts?.length > 0 ? (
+                  <div>
+                    <div className="text-xs font-semibold text-slate-700 mb-2">
+                      Active Weather Alerts ({selectedRing.ringAlerts.length})
+                    </div>
+                    <div className="space-y-2">
+                      {selectedRing.ringAlerts.map((alert, i) => {
+                        const affectsDelivery = alertAffectsDelivery(alert, selectedRing);
+                        return (
+                          <div key={i} className={`p-2 rounded-lg border text-xs ${
+                            affectsDelivery ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <Badge className={`text-[10px] ${
+                                alert.severity === 'extreme' ? 'bg-red-600' :
+                                alert.severity === 'severe' ? 'bg-orange-600' :
+                                alert.severity === 'moderate' ? 'bg-yellow-600' :
+                                'bg-blue-600'
+                              }`}>
+                                {alert.severity}
+                              </Badge>
+                              {affectsDelivery && <AlertTriangle className="w-3 h-3 text-red-600" />}
+                            </div>
+                            <div className="font-medium text-slate-900">{alert.event}</div>
+                            <div className="text-slate-600 mt-1">
+                              {new Date(alert.start_time).toLocaleDateString()} - {new Date(alert.end_time).toLocaleDateString()}
+                            </div>
+                            {affectsDelivery && (
+                              <div className="text-red-600 font-semibold mt-1">
+                                ⚠️ Conflicts with delivery schedule
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500 text-center py-4">
+                    No active alerts for this ring
+                  </div>
+                )}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Analysis Results Panel */}
       <AnimatePresence>
