@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
                     affectedStates.push(...stateMatches);
                 }
             }
+            console.log(`Alert: "${props.event}" (${props.id}) - Zones: [${affectedZones.join(', ')}], States: [${affectedStates.join(', ')}]`);
 
             // Check if this alert affects any of our monitored zones or states
             const isRelevant = 
@@ -70,8 +71,10 @@ Deno.serve(async (req) => {
                 monitoredStates.length === 0; // If no rings yet, keep all alerts
 
             if (!isRelevant) {
+                console.log(`Skipped: "${props.event}" - not relevant to monitored zones/states`);
                 continue; // Skip alerts not relevant to our delivery areas
             }
+            console.log(`Stored: "${props.event}" as relevant alert`);
 
             // Map NWS severity to our system
             const severityMap = {

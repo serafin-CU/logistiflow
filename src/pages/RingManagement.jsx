@@ -105,7 +105,7 @@ export default function RingManagement() {
 
   // Filter rings based on search and filters
   const filteredRings = uniqueRings.filter(ring => {
-    const matchStore = selectedStore === 'all' || ring.store === selectedStore;
+    const matchStore = selectedStore === 'all' || (ring.store && ring.store.toLowerCase().includes(selectedStore.toLowerCase()));
     const matchRingId = !ringIdSearch || ring.ring_id.toLowerCase().includes(ringIdSearch.toLowerCase());
     const matchDeliveryDays = selectedDeliveryDays.length === 0 || 
       (ring.delivery_days && ring.delivery_days.some(day => selectedDeliveryDays.includes(day)));
@@ -198,16 +198,24 @@ export default function RingManagement() {
               {/* Store Filter */}
               <div>
                 <Label className="text-sm font-medium mb-2 block">Store</Label>
-                <select 
-                  value={selectedStore}
-                  onChange={(e) => setSelectedStore(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                >
-                  <option value="all">All Stores ({allStores.length})</option>
-                  {allStores.map(store => (
-                    <option key={store} value={store}>{store}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Input
+                    placeholder="Search by Store..."
+                    value={selectedStore === 'all' ? '' : selectedStore}
+                    onChange={(e) => setSelectedStore(e.target.value || 'all')}
+                    className="text-sm"
+                  />
+                  {selectedStore !== 'all' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2"
+                      onClick={() => setSelectedStore('all')}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Ring ID Search */}
