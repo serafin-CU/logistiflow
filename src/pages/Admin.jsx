@@ -77,6 +77,28 @@ export default function Admin() {
     reader.readAsText(file);
   };
 
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === 'text/csv') {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const text = event.target?.result;
+        if (typeof text === 'string') {
+          setCsvData(text);
+          await processCSVImport(text);
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      toast.error('Please drop a CSV file');
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
   const processCSVImport = async (data) => {
     setIsUploading(true);
     try {
@@ -331,9 +353,24 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
                   </Button>
                 </div>
 
+                <div
+                  onDrop={handleFileDrop}
+                  onDragOver={handleDragOver}
+                  className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer bg-slate-50"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-slate-700 mb-1">
+                    Drop CSV file here or click to browse
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Supports CSV files with ring data
+                  </p>
+                </div>
+
                 <div>
                   <label className="text-sm font-medium text-slate-700 mb-2 block">
-                    Paste CSV Data
+                    Or Paste CSV Data
                   </label>
                   <Textarea
                     value={csvData}
@@ -356,19 +393,11 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
                     className="hidden"
                   />
                   <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    variant="outline"
-                    className="gap-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Upload CSV File
-                  </Button>
-                  <Button
                     onClick={() => processCSVImport(csvData)}
                     disabled={!csvData.trim() || isUploading}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
-                    {isUploading ? "Importing..." : "Import CSV"}
+                    {isUploading ? "Importing..." : "Import Pasted CSV"}
                   </Button>
                   <Button variant="outline" onClick={() => setCsvData(sampleCSV)}>
                     Load Sample
