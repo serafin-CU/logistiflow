@@ -15,7 +15,7 @@ import MetricCard from "@/components/dashboard/MetricCard";
 import RiskChart from "@/components/dashboard/RiskChart";
 import AlertCard from "@/components/dashboard/AlertCard";
 import DeliveryRow from "@/components/dashboard/DeliveryRow";
-import InteractiveWeatherMap from "@/components/map/InteractiveWeatherMap";
+
 import AddDeliveryModal from "@/components/delivery/AddDeliveryModal";
 import DeliveryDetailSheet from "@/components/delivery/DeliveryDetailSheet";
 import BulkUploadModal from "@/components/upload/BulkUploadModal";
@@ -327,10 +327,7 @@ Return risk score (0-100) and level (low/medium/high/critical).`,
           <RingBriefing rings={rings} alerts={alerts} />
         )}
 
-        {/* Interactive Map - Full Width */}
-        <div className="mb-8">
-          <InteractiveWeatherMap rings={rings} alerts={alerts} />
-        </div>
+
 
         {/* Chart */}
         <div className="mb-8">

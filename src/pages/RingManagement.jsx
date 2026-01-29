@@ -10,7 +10,7 @@ import { MapPin, Store, X } from "lucide-react";
 import { format, addDays, parseISO, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import RingMapVisualization from "@/components/ring/RingMapVisualization";
+
 import RingDetailSheet from "@/components/ring/RingDetailSheet";
 
 const Ring = base44.entities.Ring;
@@ -274,10 +274,7 @@ export default function RingManagement() {
           </CardContent>
         </Card>
 
-        {/* Map Visualization */}
-        <div className="mb-8">
-          <RingMapVisualization rings={filteredRings} alerts={alerts} />
-        </div>
+
 
         {/* Rings by Store */}
         <div className="space-y-6">
