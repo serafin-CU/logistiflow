@@ -33,27 +33,53 @@ Deno.serve(async (req) => {
                     continue;
                 }
 
-                // Get zone data for first zipcode
-                const zipcode = ring.zipcodes[0];
-                
-                // Call getZipcodeZone directly via HTTP
-                const functionUrl = `https://${Deno.env.get('BASE44_APP_ID')}.base44.app/api/functions/getZipcodeZone`;
-                const zoneResponse = await fetch(functionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': req.headers.get('Authorization')
-                    },
-                    body: JSON.stringify({ zipcode })
-                });
-                
-                if (!zoneResponse.ok) {
-                    errors++;
-                    details.push({ ring_id: ring.ring_id, status: 'error', error: `HTTP ${zoneResponse.status}` });
-                    continue;
+                // Get zone data for first zipcode - pad with leading zero if needed
+                let zipcode = ring.zipcodes[0];
+                if (zipcode.length === 4) {
+                    zipcode = '0' + zipcode;
                 }
                 
-                const zoneData = await zoneResponse.json();
+                // Use free zipcode API to get lat/long
+                const zipResponse = await fetch(`https://api.zippopotam.us/us/${zipcode}`);
+                
+                if (!zipResponse.ok) {
+                    errors++;
+                    details.push({ ring_id: ring.ring_id, status: 'error', error: `Invalid zipcode: ${zipcode}` });
+                    continue;
+                }
+
+                const zipData = await zipResponse.json();
+                const lat = parseFloat(zipData.places[0].latitude);
+                const lon = parseFloat(zipData.places[0].longitude);
+
+                // Get NWS zone from lat/long
+                const nwsResponse = await fetch(
+                    `https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`,
+                    {
+                        headers: {
+                            'User-Agent': 'WeatherShield Logistics App'
+                        }
+                    }
+                );
+
+                let zoneData = {
+                    zipcode,
+                    latitude: lat,
+                    longitude: lon,
+                    county: zipData.places[0]['place name'],
+                    state: zipData.places[0]['state abbreviation'],
+                    zone: null,
+                    forecast_zone: null,
+                    county_zone: null
+                };
+
+                if (nwsResponse.ok) {
+                    const nwsData = await nwsResponse.json();
+                    const zone = nwsData.properties?.county || nwsData.properties?.forecastZone;
+                    zoneData.zone = zone ? zone.split('/').pop() : null;
+                    zoneData.forecast_zone = nwsData.properties?.forecastZone?.split('/').pop();
+                    zoneData.county_zone = nwsData.properties?.county?.split('/').pop();
+                }
 
                 if (zoneData.error) {
                     errors++;
