@@ -35,8 +35,25 @@ Deno.serve(async (req) => {
 
                 // Get zone data for first zipcode
                 const zipcode = ring.zipcodes[0];
-                const zoneResponse = await base44.asServiceRole.functions.invoke('getZipcodeZone', { zipcode });
-                const zoneData = zoneResponse.data;
+                
+                // Call getZipcodeZone directly via HTTP
+                const functionUrl = `https://${Deno.env.get('BASE44_APP_ID')}.base44.app/api/functions/getZipcodeZone`;
+                const zoneResponse = await fetch(functionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': req.headers.get('Authorization')
+                    },
+                    body: JSON.stringify({ zipcode })
+                });
+                
+                if (!zoneResponse.ok) {
+                    errors++;
+                    details.push({ ring_id: ring.ring_id, status: 'error', error: `HTTP ${zoneResponse.status}` });
+                    continue;
+                }
+                
+                const zoneData = await zoneResponse.json();
 
                 if (zoneData.error) {
                     errors++;
