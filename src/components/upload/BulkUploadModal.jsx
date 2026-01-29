@@ -20,7 +20,7 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
     }
 
     const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-    const requiredHeaders = ["tracking_id", "zipcode", "delivery_date"];
+    const requiredHeaders = ["order_id", "zipcode", "delivery_date"];
     const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
     
     if (missingHeaders.length > 0) {
@@ -35,7 +35,11 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
       
       const row = {};
       headers.forEach((h, idx) => {
-        row[h] = values[idx];
+        if (h === 'order_id') {
+          row['tracking_id'] = values[idx];
+        } else {
+          row[h] = values[idx];
+        }
       });
       data.push(row);
     }
@@ -52,7 +56,7 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
     onSubmit(parsedData);
   };
 
-  const sampleCSV = `tracking_id,zipcode,city,state,delivery_date
+  const sampleCSV = `order_id,zipcode,city,state,delivery_date
 DEL-001,10001,New York,NY,2024-02-15
 DEL-002,90210,Beverly Hills,CA,2024-02-16
 DEL-003,60601,Chicago,IL,2024-02-17`;
@@ -87,7 +91,7 @@ DEL-003,60601,Chicago,IL,2024-02-17`;
               className="font-mono text-sm"
             />
             <p className="text-xs text-slate-500">
-              Required columns: tracking_id, zipcode, delivery_date. Optional: city, state, notes
+              Required columns: order_id, zipcode, delivery_date. Optional: city, state, notes
             </p>
           </div>
 
@@ -135,8 +139,8 @@ DEL-003,60601,Chicago,IL,2024-02-17`;
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50">
-                        <TableHead className="text-xs">Tracking ID</TableHead>
-                        <TableHead className="text-xs">Zipcode</TableHead>
+                        <TableHead className="text-xs">Order ID</TableHead>
+                        <TableHead className="text-xs">Ring ID</TableHead>
                         <TableHead className="text-xs">City</TableHead>
                         <TableHead className="text-xs">State</TableHead>
                         <TableHead className="text-xs">Date</TableHead>
