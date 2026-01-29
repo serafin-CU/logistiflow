@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Search, Filter, Download, Trash2, RefreshCw,
-  MapPin, Calendar, Package, ChevronLeft, ChevronRight
+  MapPin, Calendar, Package, ChevronLeft, ChevronRight, FileSpreadsheet
 } from "lucide-react";
 import { format } from "date-fns";
 import RiskBadge from "@/components/dashboard/RiskBadge";
 import AddDeliveryModal from "@/components/delivery/AddDeliveryModal";
 import DeliveryDetailSheet from "@/components/delivery/DeliveryDetailSheet";
 import BulkUploadModal from "@/components/upload/BulkUploadModal";
+import GoogleSheetImportModal from "@/components/delivery/GoogleSheetImportModal";
 
 const Delivery = base44.entities.Delivery;
 const WeatherAlert = base44.entities.WeatherAlert;
@@ -32,6 +33,7 @@ export default function Deliveries() {
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showSheetModal, setShowSheetModal] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -135,9 +137,11 @@ export default function Deliveries() {
   // Filter and paginate
   const filteredDeliveries = deliveries.filter(d => {
     const matchesSearch = !searchQuery || 
+      d.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.tracking_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.zipcode?.includes(searchQuery);
+      d.customer_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.store_market?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.store_name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || d.status === statusFilter;
     const matchesRisk = riskFilter === "all" || d.risk_level === riskFilter;
     return matchesSearch && matchesStatus && matchesRisk;
@@ -148,9 +152,9 @@ export default function Deliveries() {
 
   // Export to CSV
   const exportCSV = () => {
-    const headers = ["Tracking ID", "City", "State", "Zipcode", "Delivery Date", "Status", "Risk Level", "Risk Score"];
+    const headers = ["Customer ID", "Region ID", "Store Market", "Store Name", "Active", "Subscription", "Order ID", "Delivery Date", "Expected Date"];
     const rows = filteredDeliveries.map(d => [
-      d.tracking_id, d.city, d.state, d.zipcode, d.delivery_date, d.status, d.risk_level, d.risk_score
+      d.customer_id, d.current_region_id, d.store_market, d.store_name, d.is_active, d.is_active_subscription, d.order_id || d.tracking_id, d.delivery_date, d.expected_delivery_date
     ]);
     const csv = [headers, ...rows].map(row => row.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -181,6 +185,10 @@ export default function Deliveries() {
               <Download className="w-4 h-4" />
               Export CSV
             </Button>
+            <Button variant="outline" onClick={() => setShowSheetModal(true)} className="gap-2">
+              <FileSpreadsheet className="w-4 h-4" />
+              Google Sheets
+            </Button>
             <Button variant="outline" onClick={() => setShowBulkModal(true)} className="gap-2">
               <Plus className="w-4 h-4" />
               Bulk Upload
@@ -202,7 +210,7 @@ export default function Deliveries() {
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
-                placeholder="Search by tracking ID, city, or zipcode..."
+                placeholder="Search by order ID, customer ID, store..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
                 className="pl-9"
@@ -248,13 +256,15 @@ export default function Deliveries() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead>Tracking ID</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Zipcode</TableHead>
+                  <TableHead>Customer ID</TableHead>
+                  <TableHead>Region ID</TableHead>
+                  <TableHead>Store Market</TableHead>
+                  <TableHead>Store Name</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead>Subscription</TableHead>
+                  <TableHead>Order ID</TableHead>
                   <TableHead>Delivery Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Risk</TableHead>
-                  <TableHead>Score</TableHead>
+                  <TableHead>Expected Date</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -273,14 +283,21 @@ export default function Deliveries() {
                         setShowDetailSheet(true);
                       }}
                     >
-                      <TableCell className="font-medium">{delivery.tracking_id}</TableCell>
+                      <TableCell className="font-medium">{delivery.customer_id || "—"}</TableCell>
+                      <TableCell>{delivery.current_region_id || "—"}</TableCell>
+                      <TableCell>{delivery.store_market || "—"}</TableCell>
+                      <TableCell>{delivery.store_name || "—"}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                          {delivery.city}, {delivery.state}
-                        </div>
+                        <Badge className={delivery.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}>
+                          {delivery.is_active ? "Yes" : "No"}
+                        </Badge>
                       </TableCell>
-                      <TableCell>{delivery.zipcode}</TableCell>
+                      <TableCell>
+                        <Badge className={delivery.is_active_subscription ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-700"}>
+                          {delivery.is_active_subscription ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{delivery.order_id || delivery.tracking_id || "—"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -288,15 +305,7 @@ export default function Deliveries() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={statusColors[delivery.status] || statusColors.scheduled}>
-                          {delivery.status?.replace("_", " ") || "scheduled"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <RiskBadge level={delivery.risk_level || "low"} size="sm" />
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-semibold">{delivery.risk_score || 0}%</span>
+                        {delivery.expected_delivery_date ? format(new Date(delivery.expected_delivery_date), "MMM d, yyyy") : "—"}
                       </TableCell>
                       <TableCell>
                         <Button
@@ -368,6 +377,12 @@ export default function Deliveries() {
         onOpenChange={setShowBulkModal}
         onSubmit={(data) => bulkCreateMutation.mutate(data)}
         isLoading={bulkCreateMutation.isPending}
+      />
+
+      <GoogleSheetImportModal
+        open={showSheetModal}
+        onOpenChange={setShowSheetModal}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["deliveries"] })}
       />
 
       <DeliveryDetailSheet

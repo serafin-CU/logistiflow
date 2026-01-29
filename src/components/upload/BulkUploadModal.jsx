@@ -20,7 +20,7 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
     }
 
     const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-    const requiredHeaders = ["order_id", "zipcode", "delivery_date"];
+    const requiredHeaders = ["order_id", "delivery_date"];
     const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
     
     if (missingHeaders.length > 0) {
@@ -35,10 +35,14 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
       
       const row = {};
       headers.forEach((h, idx) => {
+        const value = values[idx];
         if (h === 'order_id') {
-          row['tracking_id'] = values[idx];
+          row['order_id'] = value;
+          row['tracking_id'] = value;
+        } else if (h === 'is_active' || h === 'is_active_subscription') {
+          row[h] = value.toLowerCase() === 'true';
         } else {
-          row[h] = values[idx];
+          row[h] = value;
         }
       });
       data.push(row);
@@ -56,10 +60,10 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
     onSubmit(parsedData);
   };
 
-  const sampleCSV = `order_id,zipcode,city,state,delivery_date
-DEL-001,10001,New York,NY,2024-02-15
-DEL-002,90210,Beverly Hills,CA,2024-02-16
-DEL-003,60601,Chicago,IL,2024-02-17`;
+  const sampleCSV = `customer_id,current_region_id,store_market,store_name,is_active,is_active_subscription,order_id,delivery_date,expected_delivery_date
+CUST001,NYC-R1,New York,Manhattan Store,TRUE,TRUE,ORD-12345,2026-01-30,2026-02-01
+CUST002,LA-R2,Los Angeles,Beverly Hills,TRUE,FALSE,ORD-12346,2026-01-31,2026-02-02
+CUST003,CHI-R1,Chicago,Downtown,TRUE,TRUE,ORD-12347,2026-02-01,2026-02-03`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,7 +95,7 @@ DEL-003,60601,Chicago,IL,2024-02-17`;
               className="font-mono text-sm"
             />
             <p className="text-xs text-slate-500">
-              Required columns: order_id, zipcode, delivery_date. Optional: city, state, notes
+              Required: order_id, delivery_date. Optional: customer_id, current_region_id, store_market, store_name, is_active, is_active_subscription, expected_delivery_date
             </p>
           </div>
 
@@ -139,20 +143,20 @@ DEL-003,60601,Chicago,IL,2024-02-17`;
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50">
+                        <TableHead className="text-xs">Customer ID</TableHead>
+                        <TableHead className="text-xs">Region ID</TableHead>
+                        <TableHead className="text-xs">Store Market</TableHead>
                         <TableHead className="text-xs">Order ID</TableHead>
-                        <TableHead className="text-xs">Ring ID</TableHead>
-                        <TableHead className="text-xs">City</TableHead>
-                        <TableHead className="text-xs">State</TableHead>
-                        <TableHead className="text-xs">Date</TableHead>
+                        <TableHead className="text-xs">Delivery Date</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {parsedData.slice(0, 10).map((row, i) => (
                         <TableRow key={i}>
-                          <TableCell className="text-sm font-medium">{row.tracking_id}</TableCell>
-                          <TableCell className="text-sm">{row.zipcode}</TableCell>
-                          <TableCell className="text-sm">{row.city || "—"}</TableCell>
-                          <TableCell className="text-sm">{row.state || "—"}</TableCell>
+                          <TableCell className="text-sm">{row.customer_id || "—"}</TableCell>
+                          <TableCell className="text-sm">{row.current_region_id || "—"}</TableCell>
+                          <TableCell className="text-sm">{row.store_market || "—"}</TableCell>
+                          <TableCell className="text-sm font-medium">{row.order_id}</TableCell>
                           <TableCell className="text-sm">{row.delivery_date}</TableCell>
                         </TableRow>
                       ))}
