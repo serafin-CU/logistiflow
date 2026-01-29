@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, MapPin, Clock, AlertTriangle, Filter } from "lucide-react";
 import { format, addDays, isSameDay, parseISO, isAfter, isBefore, startOfDay, endOfDay } from "date-fns";
+import RingAlertsList from "./RingAlertsList";
 
 export default function RingDetailSheet({ ring, alerts, open, onOpenChange }) {
   const [severityFilter, setSeverityFilter] = useState("all");
@@ -153,21 +154,8 @@ export default function RingDetailSheet({ ring, alerts, open, onOpenChange }) {
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* Alert Summary */}
-          <Card className="p-4 bg-gradient-to-r from-red-50 to-orange-50 border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-900">Active Weather Alerts</p>
-                <p className="text-2xl font-bold text-red-700 mt-1">{allRingAlerts.length}</p>
-              </div>
-              <AlertTriangle className="w-10 h-10 text-red-500" />
-            </div>
-            {allRingAlerts.some(a => a.severity === 'severe' || a.severity === 'extreme') && (
-              <Badge className="mt-2 bg-red-600">
-                {allRingAlerts.filter(a => a.severity === 'severe' || a.severity === 'extreme').length} Severe/Extreme
-              </Badge>
-            )}
-          </Card>
+          {/* Ring Alerts Component */}
+          <RingAlertsList ring={ring} alerts={alerts} />
 
           {/* Ring Details */}
           <Card className="p-4">
