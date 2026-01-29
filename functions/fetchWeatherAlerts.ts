@@ -8,11 +8,6 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
     try {
         const base44 = createClientFromRequest(req);
-        const user = await base44.auth.me();
-
-        if (!user) {
-            return Response.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         // Fetch all rings to identify zones and states to monitor
         const rings = await base44.asServiceRole.entities.Ring.list();
@@ -38,14 +33,14 @@ Deno.serve(async (req) => {
 
         console.log(`Fetched ${alerts.length} total alerts from NWS`);
 
-        // Clear existing alerts
+        // Get existing alerts for upsert logic
         const existingAlerts = await base44.asServiceRole.entities.WeatherAlert.list();
-        for (const alert of existingAlerts) {
-            await base44.asServiceRole.entities.WeatherAlert.delete(alert.id);
-        }
+        const existingAlertIds = new Set(existingAlerts.map(a => a.alert_id));
 
-        // Process and store new alerts
+        // Process and upsert alerts
         const processedAlerts = [];
+        const upserted = { created: 0, updated: 0, deactivated: 0 };
+        
         for (const feature of alerts) {
             const props = feature.properties;
             
@@ -85,29 +80,53 @@ Deno.serve(async (req) => {
                 'Unknown': 'minor'
             };
 
-            const alert = {
+            const alertData = {
                 alert_id: props.id || `NWS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 event: props.event || 'Weather Alert',
                 severity: severityMap[props.severity] || 'minor',
                 headline: props.headline || '',
                 description: props.description || '',
-                affected_states: [...new Set(affectedStates)], // Remove duplicates
+                affected_states: [...new Set(affectedStates)],
                 affected_zones: affectedZones,
                 start_time: props.effective || new Date().toISOString(),
                 end_time: props.expires || null,
                 is_active: true
             };
 
-            const created = await base44.asServiceRole.entities.WeatherAlert.create(alert);
-            processedAlerts.push(created);
+            // Upsert logic: check if alert already exists
+            const existingAlert = existingAlerts.find(a => a.alert_id === alertData.alert_id);
+            
+            if (existingAlert) {
+                // Update existing alert
+                await base44.asServiceRole.entities.WeatherAlert.update(existingAlert.id, alertData);
+                upserted.updated++;
+            } else {
+                // Create new alert
+                await base44.asServiceRole.entities.WeatherAlert.create(alertData);
+                upserted.created++;
+            }
+            
+            processedAlerts.push(alertData);
+            existingAlertIds.delete(alertData.alert_id); // Remove from set to track stale alerts
         }
 
-        console.log(`Stored ${processedAlerts.length} relevant alerts in database`);
+        // Deactivate alerts that are no longer in NWS feed
+        for (const staleAlert of existingAlerts) {
+            if (existingAlertIds.has(staleAlert.alert_id)) {
+                await base44.asServiceRole.entities.WeatherAlert.update(staleAlert.id, { is_active: false });
+                upserted.deactivated++;
+            }
+        }
+
+        console.log(`Processed ${processedAlerts.length} alerts - Created: ${upserted.created}, Updated: ${upserted.updated}, Deactivated: ${upserted.deactivated}`);
 
         return Response.json({
             success: true,
             total_alerts_fetched: alerts.length,
-            relevant_alerts_stored: processedAlerts.length,
+            relevant_alerts_processed: processedAlerts.length,
+            created: upserted.created,
+            updated: upserted.updated,
+            deactivated: upserted.deactivated,
             monitored_states: monitoredStates.length,
             monitored_zones: monitoredZones.length,
             timestamp: new Date().toISOString()

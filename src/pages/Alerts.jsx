@@ -40,7 +40,7 @@ export default function Alerts() {
 
   const { data: alerts = [], isLoading } = useQuery({
     queryKey: ["alerts"],
-    queryFn: () => WeatherAlert.list("-created_date", 100)
+    queryFn: () => WeatherAlert.filter({ is_active: true }, "-created_date", 100)
   });
 
   const deleteAlertMutation = useMutation({
@@ -51,55 +51,7 @@ export default function Alerts() {
   const refreshAlerts = async () => {
     setIsRefreshing(true);
     try {
-      const response = await base44.integrations.Core.InvokeLLM({
-        prompt: `Get the current active weather alerts for the United States from the National Weather Service.
-        Search for real-time weather alerts, warnings, and watches.
-        Include alerts like winter storms, severe thunderstorms, tornados, hurricanes, heat waves, flooding, etc.
-        Return up to 15 most significant active alerts covering different regions.`,
-        add_context_from_internet: true,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            alerts: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  event: { type: "string" },
-                  severity: { type: "string", enum: ["minor", "moderate", "severe", "extreme"] },
-                  headline: { type: "string" },
-                  description: { type: "string" },
-                  affected_states: { type: "array", items: { type: "string" } },
-                  end_time: { type: "string" }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // Clear existing alerts
-      const existingAlerts = await WeatherAlert.list();
-      for (const alert of existingAlerts) {
-        await WeatherAlert.delete(alert.id);
-      }
-
-      // Create new alerts
-      if (response?.alerts) {
-        for (const alert of response.alerts) {
-          await WeatherAlert.create({
-            alert_id: `NWS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            event: alert.event,
-            severity: alert.severity,
-            headline: alert.headline,
-            description: alert.description,
-            affected_states: alert.affected_states,
-            end_time: alert.end_time,
-            is_active: true
-          });
-        }
-      }
-
+      await base44.functions.invoke('fetchWeatherAlerts', {});
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
     } finally {
       setIsRefreshing(false);
@@ -266,15 +218,29 @@ export default function Alerts() {
                           <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
                             {alert.affected_states?.length > 0 && (
                               <div className="flex items-center gap-1.5">
-                                <span className="font-medium">Affected:</span>
+                                <span className="font-medium">States:</span>
                                 <span>{alert.affected_states.join(", ")}</span>
                               </div>
                             )}
-                            
+
+                            {alert.affected_zones?.length > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium">Zones:</span>
+                                <span className="text-xs">{alert.affected_zones.slice(0, 5).join(", ")}{alert.affected_zones.length > 5 ? '...' : ''}</span>
+                              </div>
+                            )}
+
                             {alert.end_time && (
                               <div className="flex items-center gap-1.5">
                                 <Clock className="w-4 h-4" />
                                 <span>Until {format(new Date(alert.end_time), "MMM d, h:mm a")}</span>
+                              </div>
+                            )}
+
+                            {alert.alert_id && (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="font-medium">ID:</span>
+                                <code className="bg-slate-100 px-1 rounded">{alert.alert_id.split('/').pop()}</code>
                               </div>
                             )}
                           </div>
