@@ -62,8 +62,13 @@ Deno.serve(async (req) => {
                 }
 
                 // Update ring with zone data
+                const zones = [];
+                if (zoneData.zone) zones.push(zoneData.zone);
+                if (zoneData.county_zone && zoneData.county_zone !== zoneData.zone) zones.push(zoneData.county_zone);
+                if (zoneData.forecast_zone && !zones.includes(zoneData.forecast_zone)) zones.push(zoneData.forecast_zone);
+                
                 const updateData = {
-                    zones: zoneData.zones || [],
+                    zones: zones,
                     latitude: zoneData.latitude,
                     longitude: zoneData.longitude,
                     state: zoneData.state
