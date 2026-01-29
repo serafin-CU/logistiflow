@@ -16,16 +16,38 @@ Deno.serve(async (req) => {
 
         console.log(`Monitoring ${monitoredStates.length} states and ${monitoredZones.length} zones`);
 
-        // Fetch active alerts from NWS API
-        const response = await fetch('https://api.weather.gov/alerts/active', {
-            headers: {
-                'User-Agent': 'WeatherShield-Logistics (contact@weathershield.com)',
-                'Accept': 'application/geo+json'
+        // Fetch active alerts from NWS API with retry logic for rate limits
+        let response;
+        let retries = 0;
+        const maxRetries = 3;
+        
+        while (retries < maxRetries) {
+            response = await fetch('https://api.weather.gov/alerts/active', {
+                headers: {
+                    'User-Agent': 'WeatherShield-Logistics (contact@weathershield.com)',
+                    'Accept': 'application/geo+json'
+                }
+            });
+
+            if (response.ok) {
+                break;
             }
-        });
+
+            if (response.status === 429) {
+                // Rate limit exceeded - wait and retry
+                const waitTime = Math.pow(2, retries) * 1000; // Exponential backoff: 1s, 2s, 4s
+                console.log(`Rate limit hit, waiting ${waitTime}ms before retry ${retries + 1}/${maxRetries}`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                retries++;
+                continue;
+            }
+
+            // For other errors, fail immediately
+            throw new Error(`NWS API error: ${response.status}`);
+        }
 
         if (!response.ok) {
-            throw new Error(`NWS API error: ${response.status}`);
+            throw new Error(`Rate limit exceeded after ${maxRetries} retries`);
         }
 
         const data = await response.json();
