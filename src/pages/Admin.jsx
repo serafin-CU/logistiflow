@@ -12,6 +12,7 @@ import {
   AlertTriangle, Package, Trash2, Settings 
 } from "lucide-react";
 import { toast } from "sonner";
+import AutomationCadenceControl from "../components/admin/AutomationCadenceControl";
 
 const Ring = base44.entities.Ring;
 const Delivery = base44.entities.Delivery;
@@ -425,6 +426,21 @@ LA-R1,Los Angeles,LA Kitchen,Downtown-1D,Monday;Wednesday,8-10am;12-2pm,90012;90
 
           {/* System Settings Tab */}
           <TabsContent value="system" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-slate-600" />
+                  Automation Settings
+                </CardTitle>
+                <CardDescription>
+                  Configure how often automated tasks run
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AutomationCadenceControl />
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
