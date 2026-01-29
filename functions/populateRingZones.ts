@@ -115,6 +115,14 @@ Deno.serve(async (req) => {
             }
         }
 
+        // Trigger weather alerts fetch after successful zone population
+        try {
+            console.log('Triggering weather alerts fetch...');
+            await base44.functions.invoke('fetchWeatherAlerts', {});
+        } catch (error) {
+            console.warn('Failed to trigger weather alerts fetch:', error.message);
+        }
+        
         return Response.json({
             success: true,
             summary: {
@@ -123,7 +131,8 @@ Deno.serve(async (req) => {
                 skipped,
                 errors
             },
-            details
+            details,
+            alerts_fetch_triggered: true
         });
 
     } catch (error) {
