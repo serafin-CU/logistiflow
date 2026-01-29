@@ -22,6 +22,7 @@ import BulkUploadModal from "@/components/upload/BulkUploadModal";
 import ManagerBriefing from "@/components/briefing/ManagerBriefing";
 import RingWeatherForecast from "@/components/dashboard/RingWeatherForecast";
 import RingBriefing from "@/components/dashboard/RingBriefing";
+import SheetImportButton from "@/components/delivery/SheetImportButton";
 
 const Delivery = base44.entities.Delivery;
 const WeatherAlert = base44.entities.WeatherAlert;
@@ -257,6 +258,7 @@ Return risk score (0-100) and level (low/medium/high/critical).`,
               <RefreshCw className={`w-4 h-4 ${isRefreshingAlerts ? "animate-spin" : ""}`} />
               Sync Alerts
             </Button>
+            <SheetImportButton onSuccess={() => queryClient.invalidateQueries({ queryKey: ["deliveries"] })} />
             <Button
               variant="outline"
               onClick={() => setShowBulkModal(true)}
