@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,8 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
   const [csvData, setCsvData] = useState("");
   const [parsedData, setParsedData] = useState([]);
   const [error, setError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
   const parseCSV = () => {
     setError("");
@@ -60,6 +62,45 @@ export default function BulkUploadModal({ open, onOpenChange, onSubmit, isLoadin
     onSubmit(parsedData);
   };
 
+  const handleFileUpload = (file) => {
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+      setError("Please upload a CSV file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      setCsvData(text);
+      setParsedData([]);
+      setError("");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleFileInput = (e) => {
+    const file = e.target.files?.[0];
+    handleFileUpload(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    handleFileUpload(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
   const sampleCSV = `customer_id,current_region_id,store_market,store_name,is_active,is_active_subscription,order_id,delivery_date,expected_delivery_date
 CUST001,NYC-R1,New York,Manhattan Store,TRUE,TRUE,ORD-12345,2026-01-30,2026-02-01
 CUST002,LA-R2,Los Angeles,Beverly Hills,TRUE,FALSE,ORD-12346,2026-01-31,2026-02-02
@@ -79,9 +120,37 @@ CUST003,CHI-R1,Chicago,Downtown,TRUE,TRUE,ORD-12347,2026-02-01,2026-02-03`;
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileInput}
+            accept=".csv"
+            className="hidden"
+          />
+          
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
+              isDragging
+                ? "border-blue-500 bg-blue-50"
+                : "border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50"
+            }`}
+          >
+            <Upload className={`w-10 h-10 mx-auto mb-3 ${isDragging ? "text-blue-600" : "text-slate-400"}`} />
+            <p className="text-sm font-medium text-slate-700 mb-1">
+              Drop CSV file here or click to browse
+            </p>
+            <p className="text-xs text-slate-500">
+              Supports CSV files with delivery data
+            </p>
+          </div>
+
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">
-              Paste CSV Data
+              Or Paste CSV Data
             </label>
             <Textarea
               value={csvData}
