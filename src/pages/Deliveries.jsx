@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Search, Filter, Download, Trash2, RefreshCw,
-  MapPin, Calendar, Package, ChevronLeft, ChevronRight, FileSpreadsheet
+  MapPin, Calendar, Package, ChevronLeft, ChevronRight, FileSpreadsheet,
+  ArrowUpDown
 } from "lucide-react";
 import { format } from "date-fns";
 import RiskBadge from "@/components/dashboard/RiskBadge";
@@ -20,6 +21,7 @@ import GoogleSheetImportModal from "@/components/delivery/GoogleSheetImportModal
 
 const Delivery = base44.entities.Delivery;
 const WeatherAlert = base44.entities.WeatherAlert;
+const Ring = base44.entities.Ring;
 
 const statusColors = {
   scheduled: "bg-slate-100 text-slate-700",
@@ -27,6 +29,24 @@ const statusColors = {
   delivered: "bg-emerald-100 text-emerald-700",
   delayed: "bg-amber-100 text-amber-700",
   cancelled: "bg-red-100 text-red-700"
+};
+
+// Store to state mapping
+const STORE_TO_STATE = {
+  "New York": "NY",
+  "Los Angeles": "CA",
+  "Chicago": "IL",
+  "Austin": "TX",
+  "Miami": "FL",
+  "Seattle": "WA",
+  "Boston": "MA",
+  "San Francisco": "CA",
+  "Denver": "CO",
+  "Atlanta": "GA",
+  "Dallas": "TX",
+  "Houston": "TX",
+  "Phoenix": "AZ",
+  "Philadelphia": "PA"
 };
 
 export default function Deliveries() {
@@ -41,11 +61,13 @@ export default function Deliveries() {
   const [riskFilter, setRiskFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [isRefreshingRisk, setIsRefreshingRisk] = useState(false);
+  const [sortBy, setSortBy] = useState("delivery_date");
+  const [sortDirection, setSortDirection] = useState("desc");
   const pageSize = 20;
 
   const { data: deliveries = [], isLoading } = useQuery({
     queryKey: ["deliveries"],
-    queryFn: () => Delivery.list("-created_date", 500)
+    queryFn: () => Delivery.list()
   });
 
   const { data: alerts = [] } = useQuery({
@@ -53,18 +75,71 @@ export default function Deliveries() {
     queryFn: () => WeatherAlert.filter({ is_active: true })
   });
 
+  const { data: rings = [] } = useQuery({
+    queryKey: ["rings"],
+    queryFn: () => Ring.list()
+  });
+
   const calculateRisk = async (delivery) => {
-    const relevantAlerts = alerts.filter(alert => 
-      alert.affected_states?.includes(delivery.state)
-    );
+    // Determine state from delivery data
+    let state = delivery.state;
+    if (!state && delivery.store_name) {
+      state = STORE_TO_STATE[delivery.store_name];
+    }
+
+    // Find ring to get zones
+    let ring = null;
+    if (delivery.ring_id) {
+      ring = rings.find(r => r.ring_id === delivery.ring_id);
+    } else if (delivery.current_region_id) {
+      ring = rings.find(r => r.region_name === delivery.current_region_id);
+    }
+
+    // Filter alerts by state OR zones
+    const relevantAlerts = alerts.filter(alert => {
+      // Match by state if available
+      if (state && alert.affected_states?.includes(state)) {
+        return true;
+      }
+      
+      // Match by zones if ring has zones
+      if (ring?.zones && alert.affected_zones) {
+        const hasMatchingZone = ring.zones.some(zone => 
+          alert.affected_zones.includes(zone)
+        );
+        if (hasMatchingZone) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+
+    console.log("Risk calculation debug:", {
+      delivery_id: delivery.id,
+      order_id: delivery.order_id,
+      state,
+      store_name: delivery.store_name,
+      ring_id: delivery.ring_id,
+      ring_zones: ring?.zones,
+      total_alerts: alerts.length,
+      relevant_alerts: relevantAlerts.length,
+      alert_samples: relevantAlerts.slice(0, 2).map(a => ({
+        event: a.event,
+        affected_states: a.affected_states,
+        affected_zones: a.affected_zones
+      }))
+    });
 
     const response = await base44.integrations.Core.InvokeLLM({
       prompt: `Analyze delivery risk:
-      Location: ${delivery.city}, ${delivery.state} ${delivery.zipcode}
+      Location: ${delivery.city || 'Unknown'}, ${state || 'Unknown State'} ${delivery.zipcode || ''}
+      Store: ${delivery.store_name || 'Unknown'}
+      Ring: ${delivery.ring_id || delivery.current_region_id || 'Unknown'}
       Date: ${delivery.delivery_date}
-      Alerts: ${relevantAlerts.map(a => `${a.event} (${a.severity})`).join(", ") || "None"}
+      Active Weather Alerts: ${relevantAlerts.map(a => `${a.event} (${a.severity}) - ${a.headline}`).join(", ") || "None"}
       
-      Calculate risk score 0-100 and level (low/medium/high/critical).`,
+      Calculate risk score 0-100 and level (low/medium/high/critical) based on the weather alerts and delivery timing.`,
       response_json_schema: {
         type: "object",
         properties: {
@@ -74,7 +149,13 @@ export default function Deliveries() {
         }
       }
     });
-    return response;
+
+    return {
+      risk_score: response.risk_score,
+      risk_level: response.risk_level,
+      weather_alerts: response.weather_alerts || [],
+      state: state // Save the determined state
+    };
   };
 
   const createDeliveryMutation = useMutation({
@@ -84,7 +165,8 @@ export default function Deliveries() {
       await Delivery.update(delivery.id, {
         risk_score: risk.risk_score,
         risk_level: risk.risk_level,
-        weather_alerts: risk.weather_alerts || []
+        weather_alerts: risk.weather_alerts,
+        state: risk.state
       });
       return delivery;
     },
@@ -102,7 +184,8 @@ export default function Deliveries() {
         await Delivery.update(delivery.id, {
           risk_score: risk.risk_score,
           risk_level: risk.risk_level,
-          weather_alerts: risk.weather_alerts || []
+          weather_alerts: risk.weather_alerts,
+          state: risk.state
         });
       }
       return deliveries;
@@ -125,7 +208,8 @@ export default function Deliveries() {
       await Delivery.update(delivery.id, {
         risk_score: risk.risk_score,
         risk_level: risk.risk_level,
-        weather_alerts: risk.weather_alerts || []
+        weather_alerts: risk.weather_alerts,
+        state: risk.state
       });
       queryClient.invalidateQueries({ queryKey: ["deliveries"] });
       setSelectedDelivery(prev => prev ? { ...prev, ...risk } : null);
@@ -134,7 +218,17 @@ export default function Deliveries() {
     }
   };
 
-  // Filter and paginate
+  // Sorting function
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+  };
+
+  // Filter and sort
   const filteredDeliveries = deliveries.filter(d => {
     const matchesSearch = !searchQuery || 
       d.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -147,14 +241,34 @@ export default function Deliveries() {
     return matchesSearch && matchesStatus && matchesRisk;
   });
 
-  const totalPages = Math.ceil(filteredDeliveries.length / pageSize);
-  const paginatedDeliveries = filteredDeliveries.slice((page - 1) * pageSize, page * pageSize);
+  // Apply sorting
+  const sortedDeliveries = [...filteredDeliveries].sort((a, b) => {
+    let aVal = a[sortBy];
+    let bVal = b[sortBy];
+    
+    // Handle null/undefined values
+    if (aVal == null) return 1;
+    if (bVal == null) return -1;
+    
+    // String comparison
+    if (typeof aVal === 'string') {
+      return sortDirection === "asc" 
+        ? aVal.localeCompare(bVal)
+        : bVal.localeCompare(aVal);
+    }
+    
+    // Number/Boolean comparison
+    return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+  });
+
+  const totalPages = Math.ceil(sortedDeliveries.length / pageSize);
+  const paginatedDeliveries = sortedDeliveries.slice((page - 1) * pageSize, page * pageSize);
 
   // Export to CSV
   const exportCSV = () => {
-    const headers = ["Customer ID", "Region ID", "Store Market", "Store Name", "Active", "Subscription", "Order ID", "Delivery Date", "Expected Date"];
-    const rows = filteredDeliveries.map(d => [
-      d.customer_id, d.current_region_id, d.store_market, d.store_name, d.is_active, d.is_active_subscription, d.order_id || d.tracking_id, d.delivery_date, d.expected_delivery_date
+    const headers = ["Customer ID", "Region ID", "Store Market", "Store Name", "Active", "Subscription", "Order ID", "Delivery Date", "Expected Date", "State", "Risk Level"];
+    const rows = sortedDeliveries.map(d => [
+      d.customer_id, d.current_region_id, d.store_market, d.store_name, d.is_active, d.is_active_subscription, d.order_id || d.tracking_id, d.delivery_date, d.expected_delivery_date, d.state || '', d.risk_level || ''
     ]);
     const csv = [headers, ...rows].map(row => row.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -164,6 +278,20 @@ export default function Deliveries() {
     a.download = `deliveries-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
   };
+
+  const SortableHeader = ({ column, children }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-slate-100 transition-colors"
+      onClick={() => handleSort(column)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortBy === column && (
+          <ArrowUpDown className="w-3 h-3 text-blue-600" />
+        )}
+      </div>
+    </TableHead>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
@@ -256,15 +384,16 @@ export default function Deliveries() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead>Customer ID</TableHead>
-                  <TableHead>Region ID</TableHead>
-                  <TableHead>Store Market</TableHead>
-                  <TableHead>Store Name</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead>Subscription</TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Delivery Date</TableHead>
-                  <TableHead>Expected Date</TableHead>
+                  <SortableHeader column="customer_id">Customer ID</SortableHeader>
+                  <SortableHeader column="current_region_id">Region ID</SortableHeader>
+                  <SortableHeader column="store_market">Store Market</SortableHeader>
+                  <SortableHeader column="store_name">Store Name</SortableHeader>
+                  <SortableHeader column="is_active">Active</SortableHeader>
+                  <SortableHeader column="is_active_subscription">Subscription</SortableHeader>
+                  <SortableHeader column="order_id">Order ID</SortableHeader>
+                  <SortableHeader column="delivery_date">Delivery Date</SortableHeader>
+                  <SortableHeader column="expected_delivery_date">Expected Date</SortableHeader>
+                  <SortableHeader column="risk_level">Risk</SortableHeader>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -308,6 +437,9 @@ export default function Deliveries() {
                         {delivery.expected_delivery_date ? format(new Date(delivery.expected_delivery_date), "MMM d, yyyy") : "—"}
                       </TableCell>
                       <TableCell>
+                        {delivery.risk_level && <RiskBadge risk={delivery.risk_level} />}
+                      </TableCell>
+                      <TableCell>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -330,7 +462,7 @@ export default function Deliveries() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
               <p className="text-sm text-slate-500">
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filteredDeliveries.length)} of {filteredDeliveries.length}
+                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, sortedDeliveries.length)} of {sortedDeliveries.length}
               </p>
               <div className="flex items-center gap-2">
                 <Button
