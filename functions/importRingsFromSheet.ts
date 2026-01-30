@@ -98,10 +98,19 @@ Deno.serve(async (req) => {
     // Convert to array
     const ringData = Array.from(ringsMap.values());
 
-    // Delete existing rings
+    // Delete existing rings in batches to avoid rate limits
     const existingRings = await base44.asServiceRole.entities.Ring.list('-created_date', 10000);
-    for (const ring of existingRings) {
-      await base44.asServiceRole.entities.Ring.delete(ring.id);
+    
+    // Delete in batches of 50 with delays
+    const batchSize = 50;
+    for (let i = 0; i < existingRings.length; i += batchSize) {
+      const batch = existingRings.slice(i, i + batchSize);
+      await Promise.all(batch.map(ring => base44.asServiceRole.entities.Ring.delete(ring.id)));
+      
+      // Add delay between batches to avoid rate limits
+      if (i + batchSize < existingRings.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
 
     // Bulk create new rings
