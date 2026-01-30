@@ -3,11 +3,31 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 /**
  * Fetches live weather alerts from weather.gov National Weather Service API
  * Updates weather alerts in the database with real-time data
+ * Implements exponential backoff and rate limit handling
  */
+
+// In-memory cache to prevent redundant API calls (persists during function execution)
+const cache = {
+    lastFetch: null,
+    data: null,
+    MIN_INTERVAL_MS: 5 * 60 * 1000 // 5 minutes minimum between fetches
+};
 
 Deno.serve(async (req) => {
     try {
         const base44 = createClientFromRequest(req);
+
+        // Check cache to avoid hitting NWS API too frequently
+        const now = Date.now();
+        if (cache.lastFetch && cache.data && (now - cache.lastFetch) < cache.MIN_INTERVAL_MS) {
+            console.log(`Using cached data from ${Math.floor((now - cache.lastFetch) / 1000)}s ago`);
+            return Response.json({
+                success: true,
+                cached: true,
+                age_seconds: Math.floor((now - cache.lastFetch) / 1000),
+                ...cache.data
+            });
+        }
 
         // Fetch all rings to identify zones and states to monitor
         const rings = await base44.asServiceRole.entities.Ring.list();
@@ -16,39 +36,70 @@ Deno.serve(async (req) => {
 
         console.log(`Monitoring ${monitoredStates.length} states and ${monitoredZones.length} zones`);
 
-        // Fetch active alerts from NWS API with retry logic for rate limits
+        // Fetch active alerts from NWS API with exponential backoff
         let response;
         let retryCount = 0;
-        const maxRetries = 3;
+        const maxRetries = 5;
         
         while (retryCount <= maxRetries) {
-            response = await fetch('https://api.weather.gov/alerts/active', {
-                headers: {
-                    'User-Agent': 'WeatherShield-Logistics (contact@weathershield.com)',
-                    'Accept': 'application/geo+json'
-                }
-            });
+            try {
+                response = await fetch('https://api.weather.gov/alerts/active', {
+                    headers: {
+                        'User-Agent': 'WeatherShield-Logistics-App/1.0 (contact@weathershield.com)',
+                        'Accept': 'application/geo+json'
+                    }
+                });
 
-            if (response.status === 429) {
-                // Rate limit hit - wait before retrying
-                const retryAfter = response.headers.get('Retry-After') || 60;
-                const waitTime = parseInt(retryAfter) * 1000;
-                
-                if (retryCount < maxRetries) {
-                    console.log(`Rate limit hit. Waiting ${waitTime}ms before retry ${retryCount + 1}/${maxRetries}`);
+                if (response.status === 429) {
+                    // Rate limit hit - use exponential backoff
+                    const retryAfter = response.headers.get('Retry-After');
+                    let waitTime;
+                    
+                    if (retryAfter) {
+                        // Use Retry-After header if provided
+                        waitTime = parseInt(retryAfter) * 1000;
+                    } else {
+                        // Exponential backoff: 2^retry * base delay (30s)
+                        waitTime = Math.min(Math.pow(2, retryCount) * 30 * 1000, 5 * 60 * 1000); // Max 5 minutes
+                    }
+                    
+                    if (retryCount < maxRetries) {
+                        console.log(`Rate limit hit. Waiting ${Math.floor(waitTime / 1000)}s before retry ${retryCount + 1}/${maxRetries}`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        retryCount++;
+                        continue;
+                    } else {
+                        // Return last successful data from cache if available
+                        if (cache.data) {
+                            console.log('Max retries exceeded, returning cached data');
+                            return Response.json({
+                                success: true,
+                                cached: true,
+                                warning: 'Rate limit exceeded, using cached data',
+                                age_seconds: Math.floor((now - cache.lastFetch) / 1000),
+                                ...cache.data
+                            });
+                        }
+                        throw new Error('Rate limit exceeded. Please increase automation interval to 30+ minutes.');
+                    }
+                }
+
+                if (!response.ok) {
+                    throw new Error(`NWS API error: ${response.status} - ${response.statusText}`);
+                }
+
+                break; // Success, exit retry loop
+            } catch (fetchError) {
+                if (retryCount < maxRetries && fetchError.message.includes('fetch')) {
+                    // Network error - retry with exponential backoff
+                    const waitTime = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s, 40s, 80s
+                    console.log(`Network error. Waiting ${Math.floor(waitTime / 1000)}s before retry ${retryCount + 1}/${maxRetries}`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
                     retryCount++;
                     continue;
-                } else {
-                    throw new Error('Rate limit exceeded. Please try again later or reduce automation frequency.');
                 }
+                throw fetchError;
             }
-
-            if (!response.ok) {
-                throw new Error(`NWS API error: ${response.status} - ${response.statusText}`);
-            }
-
-            break; // Success, exit retry loop
         }
 
         const data = await response.json();
@@ -80,7 +131,6 @@ Deno.serve(async (req) => {
                     affectedStates.push(...stateMatches);
                 }
             }
-            console.log(`Alert: "${props.event}" (${props.id}) - Zones: [${affectedZones.join(', ')}], States: [${affectedStates.join(', ')}]`);
 
             // Check if this alert affects any of our monitored zones or states
             const isRelevant = 
@@ -89,10 +139,8 @@ Deno.serve(async (req) => {
                 monitoredStates.length === 0; // If no rings yet, keep all alerts
 
             if (!isRelevant) {
-                console.log(`Skipped: "${props.event}" - not relevant to monitored zones/states`);
                 continue; // Skip alerts not relevant to our delivery areas
             }
-            console.log(`Stored: "${props.event}" as relevant alert`);
 
             // Map NWS severity to our system
             const severityMap = {
@@ -143,7 +191,7 @@ Deno.serve(async (req) => {
 
         console.log(`Processed ${processedAlerts.length} alerts - Created: ${upserted.created}, Updated: ${upserted.updated}, Deactivated: ${upserted.deactivated}`);
 
-        return Response.json({
+        const result = {
             success: true,
             total_alerts_fetched: alerts.length,
             relevant_alerts_processed: processedAlerts.length,
@@ -153,7 +201,13 @@ Deno.serve(async (req) => {
             monitored_states: monitoredStates.length,
             monitored_zones: monitoredZones.length,
             timestamp: new Date().toISOString()
-        });
+        };
+
+        // Update cache
+        cache.lastFetch = now;
+        cache.data = result;
+
+        return Response.json(result);
 
     } catch (error) {
         console.error('Error fetching weather alerts:', error);
