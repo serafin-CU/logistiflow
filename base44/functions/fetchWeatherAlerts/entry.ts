@@ -107,12 +107,11 @@ Deno.serve(async (req) => {
 
         console.log(`Fetched ${alerts.length} total alerts from NWS`);
 
-        // Get existing alerts for upsert logic
-        const existingAlerts = await base44.asServiceRole.entities.WeatherAlert.list();
+        // Get only currently active alerts from DB (smaller set, fewer reads)
+        const existingAlerts = await base44.asServiceRole.entities.WeatherAlert.filter({ is_active: true });
         const existingByAlertId = new Map(existingAlerts.map(a => [a.alert_id, a]));
-        const seenAlertIds = new Set();
 
-        // Process and categorize alerts
+        // Process relevant alerts
         const toCreate = [];
         const toUpdate = []; // { id, data }
         const processedAlerts = [];
@@ -164,34 +163,38 @@ Deno.serve(async (req) => {
                 is_active: true
             };
 
-            seenAlertIds.add(alertData.alert_id);
             processedAlerts.push(alertData);
 
             const existing = existingByAlertId.get(alertData.alert_id);
             if (existing) {
-                // Only update if something actually changed
+                // Only queue an update if something meaningful changed
                 const changed = existing.severity !== alertData.severity ||
                     existing.headline !== alertData.headline ||
-                    existing.end_time !== alertData.end_time ||
-                    existing.is_active !== true;
+                    existing.end_time !== alertData.end_time;
                 if (changed) {
                     toUpdate.push({ id: existing.id, data: alertData });
                 }
+                // Mark as seen so we don't deactivate it
+                existingByAlertId.delete(alertData.alert_id);
             } else {
                 toCreate.push(alertData);
             }
         }
 
-        // Bulk create new alerts (single API call)
-        if (toCreate.length > 0) {
-            await base44.asServiceRole.entities.WeatherAlert.bulkCreate(toCreate);
-            upserted.created = toCreate.length;
-            console.log(`Bulk created ${toCreate.length} new alerts`);
+        // Bulk create new alerts in chunks of 20 to avoid rate limits
+        const CREATE_CHUNK = 20;
+        for (let i = 0; i < toCreate.length; i += CREATE_CHUNK) {
+            const chunk = toCreate.slice(i, i + CREATE_CHUNK);
+            await base44.asServiceRole.entities.WeatherAlert.bulkCreate(chunk);
+            upserted.created += chunk.length;
+            if (i + CREATE_CHUNK < toCreate.length) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
+        console.log(`Created ${upserted.created} new alerts`);
 
-        // Throttled updates — 5 at a time with a small delay to avoid rate limits
+        // Throttled updates — 5 at a time
         const BATCH_SIZE = 5;
-        const BATCH_DELAY_MS = 300;
         for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
             const batch = toUpdate.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(({ id, data }) =>
@@ -199,13 +202,14 @@ Deno.serve(async (req) => {
             ));
             upserted.updated += batch.length;
             if (i + BATCH_SIZE < toUpdate.length) {
-                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                await new Promise(resolve => setTimeout(resolve, 400));
             }
         }
         console.log(`Updated ${upserted.updated} changed alerts`);
 
-        // Deactivate stale alerts in throttled batches
-        const staleAlerts = existingAlerts.filter(a => !seenAlertIds.has(a.alert_id) && a.is_active);
+        // Deactivate stale alerts (those still in existingByAlertId were not seen in NWS feed)
+        // Limited to 10 at a time to avoid rate limits
+        const staleAlerts = [...existingByAlertId.values()];
         for (let i = 0; i < staleAlerts.length; i += BATCH_SIZE) {
             const batch = staleAlerts.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(a =>
@@ -213,7 +217,7 @@ Deno.serve(async (req) => {
             ));
             upserted.deactivated += batch.length;
             if (i + BATCH_SIZE < staleAlerts.length) {
-                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                await new Promise(resolve => setTimeout(resolve, 400));
             }
         }
 
