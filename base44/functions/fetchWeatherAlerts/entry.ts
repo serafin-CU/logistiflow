@@ -109,11 +109,22 @@ Deno.serve(async (req) => {
 
         // Get existing alerts for upsert logic
         const existingAlerts = await base44.asServiceRole.entities.WeatherAlert.list();
-        const existingAlertIds = new Set(existingAlerts.map(a => a.alert_id));
+        const existingByAlertId = new Map(existingAlerts.map(a => [a.alert_id, a]));
+        const seenAlertIds = new Set();
 
-        // Process and upsert alerts
+        // Process and categorize alerts
+        const toCreate = [];
+        const toUpdate = []; // { id, data }
         const processedAlerts = [];
         const upserted = { created: 0, updated: 0, deactivated: 0 };
+
+        const severityMap = {
+            'Extreme': 'extreme',
+            'Severe': 'severe',
+            'Moderate': 'moderate',
+            'Minor': 'minor',
+            'Unknown': 'minor'
+        };
         
         for (const feature of alerts) {
             const props = feature.properties;
@@ -136,20 +147,9 @@ Deno.serve(async (req) => {
             const isRelevant = 
                 affectedZones.some(zone => monitoredZones.includes(zone)) ||
                 affectedStates.some(state => monitoredStates.includes(state)) ||
-                monitoredStates.length === 0; // If no rings yet, keep all alerts
+                monitoredStates.length === 0;
 
-            if (!isRelevant) {
-                continue; // Skip alerts not relevant to our delivery areas
-            }
-
-            // Map NWS severity to our system
-            const severityMap = {
-                'Extreme': 'extreme',
-                'Severe': 'severe',
-                'Moderate': 'moderate',
-                'Minor': 'minor',
-                'Unknown': 'minor'
-            };
+            if (!isRelevant) continue;
 
             const alertData = {
                 alert_id: props.id || `NWS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -164,28 +164,56 @@ Deno.serve(async (req) => {
                 is_active: true
             };
 
-            // Upsert logic: check if alert already exists
-            const existingAlert = existingAlerts.find(a => a.alert_id === alertData.alert_id);
-            
-            if (existingAlert) {
-                // Update existing alert
-                await base44.asServiceRole.entities.WeatherAlert.update(existingAlert.id, alertData);
-                upserted.updated++;
-            } else {
-                // Create new alert
-                await base44.asServiceRole.entities.WeatherAlert.create(alertData);
-                upserted.created++;
-            }
-            
+            seenAlertIds.add(alertData.alert_id);
             processedAlerts.push(alertData);
-            existingAlertIds.delete(alertData.alert_id); // Remove from set to track stale alerts
+
+            const existing = existingByAlertId.get(alertData.alert_id);
+            if (existing) {
+                // Only update if something actually changed
+                const changed = existing.severity !== alertData.severity ||
+                    existing.headline !== alertData.headline ||
+                    existing.end_time !== alertData.end_time ||
+                    existing.is_active !== true;
+                if (changed) {
+                    toUpdate.push({ id: existing.id, data: alertData });
+                }
+            } else {
+                toCreate.push(alertData);
+            }
         }
 
-        // Deactivate alerts that are no longer in NWS feed
-        for (const staleAlert of existingAlerts) {
-            if (existingAlertIds.has(staleAlert.alert_id)) {
-                await base44.asServiceRole.entities.WeatherAlert.update(staleAlert.id, { is_active: false });
-                upserted.deactivated++;
+        // Bulk create new alerts (single API call)
+        if (toCreate.length > 0) {
+            await base44.asServiceRole.entities.WeatherAlert.bulkCreate(toCreate);
+            upserted.created = toCreate.length;
+            console.log(`Bulk created ${toCreate.length} new alerts`);
+        }
+
+        // Throttled updates — 5 at a time with a small delay to avoid rate limits
+        const BATCH_SIZE = 5;
+        const BATCH_DELAY_MS = 300;
+        for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+            const batch = toUpdate.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(({ id, data }) =>
+                base44.asServiceRole.entities.WeatherAlert.update(id, data)
+            ));
+            upserted.updated += batch.length;
+            if (i + BATCH_SIZE < toUpdate.length) {
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+            }
+        }
+        console.log(`Updated ${upserted.updated} changed alerts`);
+
+        // Deactivate stale alerts in throttled batches
+        const staleAlerts = existingAlerts.filter(a => !seenAlertIds.has(a.alert_id) && a.is_active);
+        for (let i = 0; i < staleAlerts.length; i += BATCH_SIZE) {
+            const batch = staleAlerts.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(a =>
+                base44.asServiceRole.entities.WeatherAlert.update(a.id, { is_active: false })
+            ));
+            upserted.deactivated += batch.length;
+            if (i + BATCH_SIZE < staleAlerts.length) {
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
             }
         }
 
