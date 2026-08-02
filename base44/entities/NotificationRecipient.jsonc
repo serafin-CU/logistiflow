@@ -1,0 +1,42 @@
+{
+  "name": "NotificationRecipient",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "description": "Email address for notifications"
+    },
+    "severity_levels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "minor",
+          "moderate",
+          "severe",
+          "extreme"
+        ]
+      },
+      "description": "Alert severity levels this recipient should receive",
+      "default": [
+        "severe",
+        "extreme"
+      ]
+    },
+    "stores": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Specific stores to receive alerts for (empty = all stores)"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether notifications are enabled for this recipient"
+    }
+  },
+  "required": [
+    "email"
+  ]
+}

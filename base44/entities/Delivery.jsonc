@@ -1,0 +1,122 @@
+{
+  "name": "Delivery",
+  "type": "object",
+  "properties": {
+    "customer_id": {
+      "type": "string",
+      "description": "Customer identifier"
+    },
+    "current_region_id": {
+      "type": "string",
+      "description": "Current region ID"
+    },
+    "store_market": {
+      "type": "string",
+      "description": "Store market name"
+    },
+    "store_name": {
+      "type": "string",
+      "description": "Store name"
+    },
+    "is_active": {
+      "type": "boolean",
+      "description": "Whether the delivery is active",
+      "default": true
+    },
+    "is_active_subscription": {
+      "type": "boolean",
+      "description": "Whether subscription is active",
+      "default": false
+    },
+    "order_id": {
+      "type": "string",
+      "description": "Unique order identifier"
+    },
+    "delivery_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Scheduled delivery date"
+    },
+    "expected_delivery_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Expected delivery date"
+    },
+    "tracking_id": {
+      "type": "string",
+      "description": "Legacy tracking identifier (mapped from order_id)"
+    },
+    "zipcode": {
+      "type": "string",
+      "description": "Delivery destination zipcode (Ring ID)"
+    },
+    "city": {
+      "type": "string",
+      "description": "Delivery city"
+    },
+    "state": {
+      "type": "string",
+      "description": "US state abbreviation"
+    },
+    "ring_id": {
+      "type": "string",
+      "description": "Associated delivery ring ID"
+    },
+    "risk_score": {
+      "type": "number",
+      "description": "Calculated incident risk score (0-100)"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "description": "Risk classification"
+    },
+    "weather_alerts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Active weather alerts affecting this delivery"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "in_transit",
+        "delivered",
+        "delayed",
+        "cancelled"
+      ],
+      "default": "scheduled"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional delivery notes"
+    },
+    "prediction_accuracy": {
+      "type": "number",
+      "description": "Admin rating of AI prediction accuracy (1-5 stars)"
+    },
+    "prediction_feedback": {
+      "type": "string",
+      "description": "Admin notes on prediction accuracy"
+    },
+    "rated_by": {
+      "type": "string",
+      "description": "Email of admin who rated the prediction"
+    },
+    "rated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the prediction was rated"
+    }
+  },
+  "required": [
+    "order_id"
+  ]
+}

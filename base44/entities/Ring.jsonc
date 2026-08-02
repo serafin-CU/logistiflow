@@ -1,0 +1,84 @@
+{
+  "name": "Ring",
+  "type": "object",
+  "properties": {
+    "ring_id": {
+      "type": "string",
+      "description": "Unique ring identifier (e.g., NYC-R1)"
+    },
+    "store": {
+      "type": "string",
+      "description": "Store/Market name (e.g., New York, Los Angeles)"
+    },
+    "facility_center": {
+      "type": "string",
+      "description": "Kitchen/Facility location"
+    },
+    "region_name": {
+      "type": "string",
+      "description": "Region name with delivery time indicator (e.g., Manhattan-1D, Brooklyn-2D)"
+    },
+    "delivery_days": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ]
+      },
+      "description": "Days of the week when deliveries are made"
+    },
+    "time_slots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Delivery time slots (e.g., 8-10am, 10-12pm)"
+    },
+    "zipcodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of zipcodes covered by this ring"
+    },
+    "delivery_time_days": {
+      "type": "number",
+      "description": "Number of days for delivery (1 or 2)",
+      "default": 1
+    },
+    "latitude": {
+      "type": "number",
+      "description": "Center latitude for mapping"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "Center longitude for mapping"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "state": {
+      "type": "string",
+      "description": "US state (e.g., New York, California)"
+    },
+    "zones": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "NWS zone codes affecting this ring"
+    }
+  },
+  "required": [
+    "ring_id",
+    "store"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "name": "WeatherAlert",
+  "type": "object",
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "description": "NWS alert identifier"
+    },
+    "event": {
+      "type": "string",
+      "description": "Type of weather event (e.g., Winter Storm Warning)"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "minor",
+        "moderate",
+        "severe",
+        "extreme"
+      ],
+      "description": "Alert severity level"
+    },
+    "headline": {
+      "type": "string",
+      "description": "Alert headline"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed alert description"
+    },
+    "affected_zones": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Affected zone codes"
+    },
+    "affected_states": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Affected US states"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Alert start time"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Alert end time"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "alert_id",
+    "event",
+    "severity"
+  ]
+}

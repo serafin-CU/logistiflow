@@ -1,0 +1,36 @@
+{
+  "name": "AutomationSetting",
+  "type": "object",
+  "properties": {
+    "automation_name": {
+      "type": "string",
+      "description": "Name of the automation (e.g., Fetch Weather Alerts)"
+    },
+    "automation_id": {
+      "type": "string",
+      "description": "ID of the automation in the system"
+    },
+    "repeat_interval": {
+      "type": "number",
+      "description": "Interval number (e.g., 1, 15, 30, 60)"
+    },
+    "repeat_unit": {
+      "type": "string",
+      "enum": [
+        "minutes",
+        "hours",
+        "days"
+      ],
+      "description": "Unit of time for the interval"
+    },
+    "last_updated_by": {
+      "type": "string",
+      "description": "Email of admin who last updated this setting"
+    }
+  },
+  "required": [
+    "automation_name",
+    "repeat_interval",
+    "repeat_unit"
+  ]
+}
